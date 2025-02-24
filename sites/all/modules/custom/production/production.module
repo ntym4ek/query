@@ -653,6 +653,9 @@ function production_form_eck__entity__form_query_query_submit(&$form, &$form_sta
 
   $query_wr = entity_metadata_wrapper('query', $form_state["values"]["entity"]->id);
 
+  // конвертировать в новый формат (добавить Сообщение)
+  prod_query_migrate($query_wr->getIdentifier());
+
   // экспорт новой заявки
   production_query_export($query_wr);
 

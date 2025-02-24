@@ -609,8 +609,8 @@ function prod_message_add_form_submit($form, &$form_state)
     'files' => $files,
   ]);
 
-  // экспортировать Сообщение
-  prod_message_export($message->id);
+  // todo экспортировать Сообщение
+//  prod_message_export($message->id);
 
   // todo тестирование отправки письма
 //  drupal_mail('mailer', 'client_send_imported_message_mail', 'mega_comp@mail.ru', 'ru', ['message_id' => $message->id]);

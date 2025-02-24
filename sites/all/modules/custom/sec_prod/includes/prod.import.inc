@@ -368,7 +368,7 @@ function prod_message_import($array)
   $comment        = empty($array['comment']) ? '' : $array['comment'];
   $month_start  = helper_datetime_to_timestamp($array['month']);
   $nom_id       = prod_nomenklatura_get_by_1c_params($nom_id_1c, $nom_artikul)->tid;
-  $reason       = prod_reason_get_by_1c_id($array['reason_id']);
+  $reason       = prod_reason_get_by_1c_id($array['reason_1c']);
 
   // получить Загрузку, общий Объём и Дату начала выпуска
   $load = [];
@@ -440,7 +440,7 @@ function prod_message_import($array)
   // создать записи плана и сообщения
   try {
     $plan_rec = null;
-    if (prod_plan_has_approved($month_start) && $array['type'] == 'pred') {
+    if (prod_plan_has_approved($month_start) && $array['plan_type'] == 'pred') {
       watchdog('import', 'Импорт плана. Попытка импорта предварительного плана при наличии утверждённого. Сообщение %message_id_1c', ['%message_id_1c' => $message_id_1c],WATCHDOG_ERROR);
 
       // уведомить об ошибке для устранения причин
@@ -460,7 +460,7 @@ function prod_message_import($array)
         'import_time_ts' => REQUEST_TIME,
         'month_ts' => $month_start,
         'nom_id' => $nom_id,
-        'type' => $array['type'] == 'pred' ? PROD_PLAN_TYPE_PRED : PROD_PLAN_TYPE_OPER,
+        'type' => $array['plan_type'] == 'pred' ? PROD_PLAN_TYPE_PRED : PROD_PLAN_TYPE_OPER,
         'load' => $load,
       ]);
     }
@@ -517,7 +517,7 @@ function prod_message_import($array)
           'import_time_ts' => REQUEST_TIME,
           'month_ts' => $month_start,
           'nom_id' => PROD_SERVICE_NOM_ID,                          // сервисная запись отличается только Номенклатурой
-          'type' => $array['type'] == 'pred' ? PROD_PLAN_TYPE_PRED : PROD_PLAN_TYPE_OPER,
+          'type' => $array['plan_type'] == 'pred' ? PROD_PLAN_TYPE_PRED : PROD_PLAN_TYPE_OPER,
           'load' => $service_load,
         ]);
       }
@@ -528,17 +528,17 @@ function prod_message_import($array)
   }
 
 
-  // уведомить клиентов о новой заявке
+  // todo уведомить клиентов о новой заявке
   $nom_info = prod_nomenklatura_get_info($nom_id);
-  if ($message && $users = ext_user_get_users_by_company_id($nom_info)) {
+  if (false && $message && $users = ext_user_get_users_by_company_id($nom_info)) {
     foreach ($users as $user) {
       // получить настройку пользователя для Номенклатуры/Месяца
       $user_settings = variable_get('user_settings_' . $GLOBALS['user']->uid);
-      $mail_nom = $user_settings['mail'][$nom_id] ?? false;
+      $mail_by_nom = $user_settings['mail'][$nom_id] ?? false;
       // получить настройку: отправлять сразу или раз в сутки
       $mail_immediatelly = empty($user->field_notify_once_a_day["und"][0]["value"]);
 
-      if ($mail_nom && $mail_immediatelly) {
+      if ($mail_by_nom && $mail_immediatelly) {
         drupal_mail('mailer', 'client_send_imported_message_mail', $user->mail, user_preferred_language($user), ['message_id' => $message->id]);
       }
     }
