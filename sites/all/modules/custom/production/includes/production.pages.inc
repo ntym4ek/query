@@ -254,7 +254,7 @@ function production_year_table($client_id)
   foreach($nom_id_list as $index => $nom_id) {
     $nom_info = production_nomenklatura_get_info($nom_id);
     $nom_item = [
-      'year' => ['plan' => 0, 'fact' => 0],
+      'year' => ['plan' => 0],
       'months' => [],
       'label' => $nom_info['label'],
     ];
@@ -267,17 +267,15 @@ function production_year_table($client_id)
         $query_info = production_query_get_info($query_actual);
         $nom_item['months'][$month_num] = $query_info['output'];
         $nom_item['year']['plan'] += $query_info['output']['plan'];
-        $nom_item['year']['fact'] += $query_info['output']['fact'];
       }
     }
     if ($nom_item['year']['plan']) {
       $nom_arr[$nom_id] = $nom_item;
     }
-//    if (count($nom_arr) > 10) break;
   }
 
   // шапка
-  $header = ['Наименование', ['data' => 'План', 'align' => 'center'], ['data' => 'Факт', 'align' => 'center']];
+  $header = ['Наименование', ['data' => 'План', 'align' => 'center']];
   foreach ([9,10,11,12,1,2,3,4,5,6,7,8] as $m_num) {
     $header[] = ['data' => MONTHS[$m_num], 'align' => 'center'];
   }
@@ -285,26 +283,18 @@ function production_year_table($client_id)
   // табличная часть
   $rows = [];
   foreach ($nom_arr as $n_tid => $n_item) {
-    $row = [$n_item['label'], ['data' => number_format($n_item['year']['plan'], 1, ',', ' '), 'align' => 'right'], ['data' => number_format($n_item['year']['fact'], 1, ',', ' '), 'align' => 'right']];
+    $row = [$n_item['label'], ['data' => helper_number_format($n_item['year']['plan'], 1, ' '), 'align' => 'right']];
     foreach ([9,10,11,12,1,2,3,4,5,6,7,8] as $m_num) {
-      $month_start = gmmktime(0, 0, 0, $m_num, 1, $m_num < 9 ? $year : $year-1);
-      $class = 'green'; $align = 'right';
-      if ($month_start > REQUEST_TIME) $class = 'red';
-      if (date('n', $month_start) == date('n')) {
-        $class = ''; $align = 'center';
-        $output = $n_item['months'][$m_num]['plan'] ? number_format($n_item['months'][$m_num]['plan'], 1, ',', ' ') . ' / ' . number_format($n_item['months'][$m_num]['fact'], 1, ',', ' ') : '';
-      } else {
-        $output = $n_item['months'][$m_num]['plan'] ? number_format($n_item['months'][$m_num]['plan'], 1, ',', ' ') : '';
-      }
+      $align = 'right';
+      $output = $n_item['months'][$m_num]['plan'] ? helper_number_format($n_item['months'][$m_num]['plan'], 1, ' ') : '';
 
 
-      $row[] = ['data' => $output, 'align' => $align, 'class' => $class];
+      $row[] = ['data' => $output, 'align' => $align];
     }
     $rows[] = $row;
   }
 
   return  '<div id="table-wrapper">' .
-            '<h5>Таблица носит ознакомительный характер и может содержать неактуальные данные. За точной информацией обратитесь к нашему менеджеру.</h5>' .
             theme('table', ['header' => $header, 'rows' => $rows, 'attributes' => ['class' => ['table-year-plan']]]) .
           '</div>';
 }

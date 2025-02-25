@@ -59,6 +59,15 @@ function prod_menu()
     'file' => 'includes/prod.pages.inc',
     'type' => MENU_NORMAL_ITEM,
   ];
+  $items['production/year-plan'] = array(
+    'title' => 'План на сезон',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => ['prod_year_plan_form'],
+    'access callback' => true,
+    'file' => 'includes/prod.pages.inc',
+    'type' => MENU_NORMAL_ITEM,
+//    'menu_name' => 'main-menu',
+  );
 
   return $items;
 }
@@ -637,7 +646,7 @@ function prod_nomenklatura_get_list($params)
 /**
  * Вернуть список Номенклатуры из Сообщений по заданным параметрам в массиве $params
  * 'month_ts' - * unix timestamp, начало месяца, за который вернуть заявки
- * 'company_ids' - tid клиента
+ * 'company_ids' - массив tid клиента
  *
  * @return array - краткая информация по Ном
  **/
@@ -665,8 +674,8 @@ function prod_nomenklatura_get_list_by_messages($params)
  * Вернуть список Номенклатуры из Плана по заданным параметрам в массиве $params
  * 'month_ts' - * unix timestamp, начало месяца, за который вернуть заявки
  * 'date_ts' -  unix timestamp, начало даты, включительно по которую вернуть заявки (по полю created)
- * 'pu_ids' - tid установок
- * 'company_id' - tid клиента
+ * 'pu_ids' - массив tid установок
+ * 'company_ids' - массив tid клиента
  *
  * @return array - краткая информация по Ном
  **/
@@ -694,8 +703,8 @@ function prod_nomenklatura_get_list_by_plan($params)
     $dbr->condition($db_or);
   }
   $dbr->innerJoin('field_data_field_client', 'fc', 'fc.entity_id = fn.field_pp_nomenklatura_target_id');
-  if (!empty($params['company_id'])) {
-    $dbr->condition('fc.field_client_tid', $params['company_id']);
+  if (!empty($params['company_ids'])) {
+    $dbr->condition('fc.field_client_tid', $params['company_ids'], 'IN');
   }
   $dbr->addField('fc', 'field_client_tid', 'company_id');
   $dbr->distinct();

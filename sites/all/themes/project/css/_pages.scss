@@ -142,6 +142,26 @@
   }
 }
 
+.year-plan-page {
+  margin-bottom: 4rem;
+  .filters {
+    display: flex;
+    .form-item { margin-right: 1rem; }
+  }
+  .table-year-plan {
+    font-size: $font-size-small;
+    width: 100%;
+    tr { background: none; }
+    th {
+      padding: 5px 8px;
+      white-space: nowrap;
+      &:not(:first-child) { text-align: center; }
+    }
+    td:not(:first-child) { white-space: nowrap; }
+    .empty { padding: 1rem; }
+  }
+}
+
 
 // - Устаревшие разделы ------------------------------------------------------------------------------------------------
 .view {

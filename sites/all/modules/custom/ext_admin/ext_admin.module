@@ -101,9 +101,9 @@ function ext_admin_process_migration()
   $queue->deleteQueue();
   return;
   // список для очереди пока только за 2025
-  for ($i=1; $i<10; $i++) {
+  for ($i=1; $i<=12; $i++) {
     $counter = 0;
-    $month_start = helper_datetime_to_timestamp('01.0' . $i . '.2025');
+    $month_start = gmmktime(0, 0, 0, $i, 1, 2024);
 
     prod_message_delete_all($month_start);
     prod_plan_record_delete_all($month_start);

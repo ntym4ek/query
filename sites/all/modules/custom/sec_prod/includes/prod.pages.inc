@@ -493,12 +493,10 @@ function prod_message_add_form($form, $form_state, $nomenklatura_id = null, $mon
 
   return $form;
 }
-
 function prod_message_add_callback($form, &$form_state)
 {
   return $form;
 }
-
 function prod_message_add_form_validate($form, &$form_state)
 {
   if (!$form["date"]["#disabled"]) {
@@ -534,7 +532,6 @@ function prod_message_add_form_validate($form, &$form_state)
   }
 
 }
-
 function prod_message_add_form_submit($form, &$form_state)
 {
   $month_start = gmmktime(0, 0, 0, $form_state['values']['month'], 1 , $form_state['values']['year']);
@@ -661,8 +658,142 @@ function prod_nom_page_settings_form($form, $form_state, $month_start, $nom_id)
 
   return $form;
 }
-
 function prod_nom_page_settings_form_callback($form, $form_state)
 {
   return $form;
+}
+
+function prod_year_plan_form($form, $form_state)
+{
+  // дефолтные значения из сессии или текущие
+  $company_default  = ext_user_get_session_setting('page_year_plan_company') ?? '';
+  $year_default     = ext_user_get_session_setting('page_year_plan_year') ?? (date('n') < 9 ? date('Y')-1 : date('Y'));
+
+  $company        = empty($form_state["values"]['company']) ? $company_default : $form_state["values"]['company'];
+  $year           = empty($form_state["values"]['year'])    ? $year_default : $form_state["values"]['year'];
+
+  // если значение задано пользователем, сохранить в сессии
+  if (!empty($form_state["values"]["company"])) ext_user_store_session_setting('page_year_plan_company', $form_state["values"]["company"]);
+  if (!empty($form_state["values"]["year"]))    ext_user_store_session_setting('page_year_plan_year', $form_state["values"]["year"]);
+
+
+  $form = [
+    '#prefix' => '<div id="year-plan-form-wrapper" class="year-plan-page">',
+    '#suffix' => '</div>',
+    'filters' => [
+      '#type' => 'container',
+      '#attributes' => ['class' => ['filters']],
+    ],
+  ];
+
+  $options_c = [];
+  $query = db_select('taxonomy_term_data', 't');
+  $query ->fields('t', ['tid', 'name']);
+  $query ->orderBy('name');
+  $query ->innerJoin('field_data_field_client', 'fc', 'fc.field_client_tid = t.tid');
+  // клиенту ограничиваем выбор его компаниями
+  if (user_has_role(ROLE_USER_PRODUCTION)) {
+    $query ->condition('fc.field_client_tid', array_keys(ext_user_get_companies_by_user()), 'IN');
+  }
+  $query ->condition('fc.bundle', 'nomenklatura');
+  $query ->innerJoin('field_data_field_pp_nomenklatura', 'fn', 'fn.field_pp_nomenklatura_target_id = fc.entity_id');
+  if ($companies = $query->execute()->fetchAllAssoc('tid')) {
+    foreach ($companies as $tid => $term) {
+      $options_c[$tid] = $term->name;
+    }
+  }
+
+  $company = $company && isset($options_c[$company]) ? $company : array_key_first($options_c);
+
+  $form['filters']['company'] = array(
+    '#title' => 'Компания',
+    '#type' => 'select',
+    '#options' => $options_c,
+    '#default_value' => $company,
+    '#ajax' => [
+      'callback' => 'prod_year_plan_form_callback',
+      'wrapper' => 'year-plan-form-wrapper',
+    ],
+  );
+
+  $year_opts = [];
+  for($i = -2; $i < 1; $i++) {
+    $yr = date('Y') + $i;
+    $year_opts[$yr] = $yr;
+  }
+  $form['filters']['year'] = [
+    '#title' => 'Сезон',
+    '#type' => 'select',
+    '#options' => $year_opts,
+    '#default_value' => [$year],
+    '#ajax' => [
+      'callback' => 'prod_year_plan_form_callback',
+      'wrapper' => 'year-plan-form-wrapper',
+    ],
+  ];
+
+  $form['table'] = [
+    '#markup' => prod_year_table($company, $year),
+  ];
+
+
+  return $form;
+}
+function prod_year_plan_form_callback($form, $form_state)
+{
+  return $form;
+}
+function prod_year_table($company_id, $year)
+{
+  // собрать последние Записи плана по Номенклатуре за 12 месяцев начиная с сентября
+  $nom_arr = $sort_arr = [];
+  for ($i = 1; $i <= 12; $i++) {
+    $month_start = gmmktime(0, 0, 0, 9 + $i - 1, 1, $year);
+    $month_num = date('n', $month_start);
+    // получить список номенклатуры
+    $nom_list = prod_nomenklatura_get_list_by_plan(['company_ids' => [$company_id], 'month_ts' => $month_start]);
+
+    foreach($nom_list as $nomid => $nom) {
+      if ($plan_rec_last = prod_plan_record_get_last($month_start, $nomid)) {
+        $nom_info = prod_nomenklatura_get_info($nomid);
+        if (!isset($nom_arr[$nomid])) {
+          $nom_arr[$nomid] = [
+            'label' => $nom_info['label'],
+            'months' => [],
+            'year_amount' => 0,
+          ];
+          $sort_arr[$nom_info['label']] = $nomid;
+        }
+        $plan_rec_info = prod_plan_record_get_info($plan_rec_last->id);
+        $nom_arr[$nomid]['months'][$month_num] = ['month_start' => $month_start, 'volume' => $plan_rec_info['volume']];
+        $nom_arr[$nomid]['year_amount'] += $plan_rec_info['volume'];
+      }
+    }
+  }
+
+  // шапка
+  $header = ['Наименование', ['data' => 'На сезон', 'align' => 'center']];
+  foreach ([9,10,11,12,1,2,3,4,5,6,7,8] as $m_num) {
+    $header[] = ['data' => helper_month_label_ru($m_num), 'align' => 'center'];
+  }
+
+  // табличная часть
+  ksort($sort_arr);
+  $rows = [];
+  foreach ($sort_arr as $n_tid) {
+    if ($nom_arr[$n_tid]['year_amount']) {
+      $row = [$nom_arr[$n_tid]['label'], ['data' => helper_number_format($nom_arr[$n_tid]['year_amount'], 1, ' '), 'align' => 'right']];
+      foreach ([9,10,11,12,1,2,3,4,5,6,7,8] as $m_num) {
+        if (!empty($nom_arr[$n_tid]['months'][$m_num]['volume'])) {
+          $month_start = $nom_arr[$n_tid]['months'][$m_num]['month_start'];
+          $volume = $nom_arr[$n_tid]['months'][$m_num]['volume'];
+          $output = '<a href="/production/nomenklatura/' . $n_tid . '/' . $month_start . '" target="_blank">' . helper_number_format($volume, 1, ' ') . '</a>';
+        } else $output = '';
+        $row[] = ['data' => $output, 'align' => 'right'];
+      }
+      $rows[] = $row;
+    }
+  }
+
+  return  theme('table', ['header' => $header, 'rows' => $rows, 'attributes' => ['class' => ['table-year-plan']], 'empty' => 'Нет данных за выбранный сезон']);
 }
