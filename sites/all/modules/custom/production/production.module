@@ -92,7 +92,7 @@ function production_import_processors_alter(&$processors)
     $processors['first_queue'][] =  ['mask' => '/^query_import_pred_.*\.json/',  'include' => $path . 'production.import.inc', 'func' => 'production_query_import', 'archive' => 'prod/prod'];
 
     $processors['last_queue'][]  =  ['mask' => '/^plan.*\.json/',                'include' => $path . 'production.import.inc', 'func' => 'production_produce_plan_import', 'archive' => 'prod/prod'];
-    $processors['last_queue'][]  =  ['mask' => '/^query_import_main_.*\.json/',  'include' => $path . 'production.import.inc', 'func' => 'production_query_import', 'archive' => 'prod/prod'];
+    $processors['last_queue'][]  =  ['mask' => '/^query_import_oper_.*\.json/',  'include' => $path . 'production.import.inc', 'func' => 'production_query_import', 'archive' => 'prod/prod'];
   }
 }
 

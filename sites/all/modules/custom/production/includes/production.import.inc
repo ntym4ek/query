@@ -303,7 +303,7 @@ function production_produce_plan_import($array)
       $query_wr->field_nomenklatura = $plan_item['field_nomenklatura'];
       $query_wr->field_qty = $plan_item['field_qty'];
       $query_wr->field_query_type = 'plan';
-      $query_wr->field_query_status_client = ($array['type'] == 'main' ? 'approved' : 'processing'); // план может быть предварительным "pred" и утверждённым "main"
+      $query_wr->field_query_status_client = ($array['type'] == 'pred' ? 'processing' : 'approved'); // план может быть предварительным "pred" и утверждённым "appr"
       $query_wr->field_query_status_manager = 'approved';
       $query_wr->field_query_period = ['value' => 0, 'value2' => 0];
       $query_wr->field_load_json = drupal_json_encode($plan_item['load']);
