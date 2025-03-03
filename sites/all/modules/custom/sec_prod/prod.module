@@ -353,6 +353,22 @@ function prod_message_get_last_date_volume($month_start, $nom_id)
 }
 
 /**
+ * Вернуть Сообщение по 1C ID
+ */
+function prod_message_get_by_1c_id($id_1c)
+{
+  $efquery = new EntityFieldQuery();
+  $result = $efquery
+    ->entityCondition('entity_type', 'message')
+    ->fieldCondition('field_1c_id', 'value', $id_1c)
+    ->execute();
+  if ($result) {
+    $entities = entity_load('message', [reset($result['message'])->id]);
+  }
+  return empty($entities) ? false: reset($entities);
+}
+
+/**
  * Экспортировать Сообщение от Пользователя
  * @param $query_wr
  */
@@ -1265,3 +1281,6 @@ function prod_query_migrate($qid)
     watchdog('migration', 'Неудачно. %error (%id)', ['%id' => $query_wr->getIdentifier(), '%error' => $error], WATCHDOG_ERROR);
   }
 }
+
+
+

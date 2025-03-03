@@ -359,8 +359,15 @@ function prod_plan_import($array)
  */
 function prod_message_import($array)
 {
-  $parent_id      = empty($array['ID']) ? 0 : $array['ID'];
   $message_id_1c  = empty($array["ID_1c"]) ? '' : $array["ID_1c"];
+
+  // Из-за возможного дублирования Сообщений из 1С нужно перед созданием искать их по 1c_id
+  if (prod_message_get_by_1c_id($message_id_1c)) {
+    watchdog('import', 'Импорт Сообщения. Попытка импорта существующего сообщения в ID 1C: %message_id_1c', ['%message_id_1c' => $message_id_1c],WATCHDOG_ERROR);
+    return false;
+  }
+
+  $parent_id      = empty($array['ID']) ? 0 : $array['ID'];
   $created        = empty($array["created"]) ? REQUEST_TIME : helper_datetime_to_timestamp($array['created']);
   $nom_id_1c      = empty($array['nom_id']) ? '' : $array['nom_id'];
   $nom_artikul    = empty($array['artikul_1c']) ? '' : $array['artikul_1c'];
@@ -496,6 +503,9 @@ function prod_message_import($array)
     ]);
 
     // если пришла Занятость
+    // upd Занятость должна приходить в Сообщениях с оперативным планом,
+    // так как при изменении предварительного плана он каждый раз выгружается вместе с Занятостью,
+    // а после утверждения плана он больше не приходит.
     if (!empty($array['service'])) {
       $service_load = [];
       foreach($array['service'] as $item) {

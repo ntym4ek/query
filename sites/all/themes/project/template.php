@@ -193,8 +193,8 @@ function project_produce_unit($vars)
       $classes = $load[$day_start]['classes'];
       $nam_name = $produce_unit['nom'][$load[$day_start]['nom_id']]['info']['label'];
 
-      $title = str_replace('"', '', $nam_name) . ($load[$day_start]['output'] ? '<br />' . $load[$day_start]['output'] : '');
-      $tooltip = ' data-toggle="tooltip" data-placement="top" data-html="true" title="' . $title . '"';
+      $title = str_replace('"', '', $nam_name) . ($load[$day_start]['output'] ? ' - ' . $load[$day_start]['output'] : '');
+      $tooltip = ' title="' . $title . '"';
       $tooltip = empty($load[$day_start]['is_own']) ? '' : $tooltip;
     }
     $days .= '<span class="c-box ' . implode(' ', $classes) . '"' . $tooltip . '>' . $i . '</span>';
