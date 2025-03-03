@@ -221,8 +221,6 @@ function prod_message_get_info($mid)
 {
   $message_wr = entity_metadata_wrapper('message', $mid);
 
-  $plan_rec_info = $message_wr->field_m_plan_record->value() ? prod_plan_record_get_info($message_wr->field_m_plan_record->getIdentifier()) : null;
-
   $author = $message_wr->field_m_author->value();
   $params = drupal_json_decode($message_wr->field_m_params->value());
 
@@ -300,6 +298,11 @@ function prod_message_get_info($mid)
     ];
   }
 
+  // так как План должен выгружаться после каждого изменения,
+  // а импорт плана удаляет все предыдущие Записи плана,
+  // то ссылка на Запись плана в Сообщении быстро становится неактуальной
+  // $plan_rec_info = $message_wr->field_m_plan_record->value() ? prod_plan_record_get_info($message_wr->field_m_plan_record->getIdentifier()) : null;
+
   return [
     'id' => $mid,
     'month' => $message_wr->field_m_month->value(),
@@ -314,7 +317,7 @@ function prod_message_get_info($mid)
     'reason' => $reason,
     'comment' => $message_wr->field_comment->value(),
     'created' => $message_wr->created->value(),
-    'plan_rec_id' => $plan_rec_info['id'] ?? null,
+    // 'plan_rec_id' => $plan_rec_info['id'] ?? null,
     'params' => $params,
     'warning' => $message_wr->field_m_warning->value() == PROD_WARNING_RED,
     'files' => $files,
@@ -481,6 +484,7 @@ function prod_plan_record_get_last($month_ts, $nom_id)
 function prod_plan_record_get_info($id)
 {
   $plan_rec_wr = entity_metadata_wrapper('plan', $id);
+  if (!$plan_rec_wr->value()) return [];
 
   $volume = 0;
   $date = 0;
@@ -527,16 +531,21 @@ function prod_plan_record_delete_all($month_ts = null)
 }
 
 /**
- * Удалить сервисную запись плана на месяц.
+ * Удалить Записи плана по Месяцу и Номенклатуре (кроме записей утверждённого плана)
  * @param $month_ts
+ * @param $nom_id
  */
-function prod_plan_record_delete_service($month_ts)
+function prod_plan_record_delete($month_ts, $nom_id)
 {
   $efquery = new EntityFieldQuery();
   $efquery->entityCondition('entity_type', 'plan');
   if ($month_ts) {
     $efquery->fieldCondition('field_pp_month', 'value', $month_ts);
-    $efquery->fieldCondition('field_pp_nomenklatura', 'target_id', PROD_SERVICE_NOM_ID);
+    $efquery->fieldCondition('field_pp_nomenklatura', 'target_id', $nom_id);
+    // сервисные записи удалить в тч для Утв. плана
+    if ($nom_id != PROD_SERVICE_NOM_ID) {
+      $efquery->fieldCondition('field_pp_type', 'value', PROD_PLAN_TYPE_APPR, '!=');
+    }
   }
   $result = $efquery->execute();
   if ($result) {
@@ -1132,7 +1141,7 @@ function prod_query_migrate($qid)
           if ($query_wr->created->value() > $prod_rec_service_info['created']) {
             return;
           } else {
-            prod_plan_record_delete_service($query_wr->field_month->value());
+            prod_plan_record_delete($query_wr->field_month->value(), PROD_SERVICE_NOM_ID);
           }
         }
       }

@@ -230,6 +230,9 @@ function prod_nomenklatura_import($array)
   }
 }
 
+/**
+ * Импортировать Записи плана из файла плана
+ */
 function prod_plan_import($array)
 {
   if (is_array($array) && !empty($array['load'])) {
@@ -283,7 +286,7 @@ function prod_plan_import($array)
       }
     }
 
-    // удалить старый План на месяц, включая сервисную запись
+    // удалить все Записи плана на месяц, включая сервисную запись
     prod_plan_record_delete_all($month_start);
 
     // добавление Плана на месяц
@@ -331,6 +334,7 @@ function prod_plan_import($array)
       }
 
       if ($service_load) {
+        // Сервисная запись уже удалена выше, создаём новую
         prod_plan_record_create([
           'import_time_ts' => REQUEST_TIME,
           'month_ts' => $month_start,
@@ -361,19 +365,30 @@ function prod_message_import($array)
 {
   $message_id_1c  = empty($array["ID_1c"]) ? '' : $array["ID_1c"];
 
-  // Из-за возможного дублирования Сообщений из 1С нужно перед созданием искать их по 1c_id
-  if (prod_message_get_by_1c_id($message_id_1c)) {
-    watchdog('import', 'Импорт Сообщения. Попытка импорта существующего сообщения в ID 1C: %message_id_1c', ['%message_id_1c' => $message_id_1c],WATCHDOG_ERROR);
+
+  $month_start  = helper_datetime_to_timestamp($array['month']);
+  $err_message = '';
+  if (prod_plan_has_approved($month_start)) {
+    if ($array['plan_type'] == 'pred')            $err_message = 'Импорт Сообщения. Попытка импорта записи предварительного плана при наличии утверждённого на ' . $array['month'] . '. ID 1C cообщения: ' . $message_id_1c;
+  } elseif ($array['plan_type'] == 'oper')        $err_message = 'Импорт Сообщения. Попытка импорта записи оперативного плана при отсутствии утверждённого на ' . $array['month'] . '. ID 1C cообщения: ' . $message_id_1c;
+
+  if ($err_message) {
+    watchdog('import', $err_message, [], WATCHDOG_ERROR);
+    drupal_mail('system', 'mail', 'mega_comp@mail.ru', language_default(), array(
+      'context' => ['subject' => 'Производство Агрохимикат. Ошибка импорта', 'message' => $err_message]
+    ));
     return false;
   }
 
   $parent_id      = empty($array['ID']) ? 0 : $array['ID'];
-  $created        = empty($array["created"]) ? REQUEST_TIME : helper_datetime_to_timestamp($array['created']);
+  $created        = REQUEST_TIME;
+  if (isset($array["created"]) && $timestamp = helper_datetime_to_timestamp($array['created'])) {
+    $created      = $timestamp;
+  }
   $nom_id_1c      = empty($array['nom_id']) ? '' : $array['nom_id'];
   $nom_artikul    = empty($array['artikul_1c']) ? '' : $array['artikul_1c'];
   $warning        = empty($array['warning']) || $array['warning'] === "false" ? null : PROD_WARNING_RED;
   $comment        = empty($array['comment']) ? '' : $array['comment'];
-  $month_start  = helper_datetime_to_timestamp($array['month']);
   $nom_id       = prod_nomenklatura_get_by_1c_params($nom_id_1c, $nom_artikul)->tid;
   $reason       = prod_reason_get_by_1c_id($array['reason_1c']);
 
@@ -437,7 +452,7 @@ function prod_message_import($array)
     }
   }
   if (!$changes) {
-    watchdog('import', 'Импорт Сообщения. Не определено Изменение Сообщение %message_id_1c', ['%message_id_1c' => $message_id_1c],WATCHDOG_ERROR);
+    watchdog('import', 'Импорт Сообщения. Не определено Изменение Сообщение %message_id_1c', ['%message_id_1c' => $message_id_1c],WATCHDOG_WARNING);
   }
 
   // сохранить изменения объёма и даты в массиве параметров
@@ -446,31 +461,18 @@ function prod_message_import($array)
 
   // создать записи плана и сообщения
   try {
-    $plan_rec = null;
-    if (prod_plan_has_approved($month_start) && $array['plan_type'] == 'pred') {
-      watchdog('import', 'Импорт плана. Попытка импорта предварительного плана при наличии утверждённого. Сообщение %message_id_1c', ['%message_id_1c' => $message_id_1c],WATCHDOG_ERROR);
+    // удалить предыдущие Записи плана по Ном и Месяцу, кроме Утвержденного плана
+    prod_plan_record_delete($month_start, $nom_id);
 
-      // уведомить об ошибке для устранения причин
-      drupal_mail('system', 'mail', 'mega_comp@mail.ru', language_default(), array(
-        'context' => array(
-          'subject' => 'Производство Агрохимикат. Ошибка импорта',
-          'message' => 'Импорт занятости. Попытка импорта предварительной заявки при наличии утверждённого плана ' . $array['month'] . '.',
-        )
-      ));
-
-    // todo добавить в комментарий, что план не изменён (о чём это?)
-
-    } else {
-      // в заявках план или Предварительный или Оперативный
-      // Утверждённый приходит только в файле плана
-      $plan_rec = prod_plan_record_create([
-        'import_time_ts' => REQUEST_TIME,
-        'month_ts' => $month_start,
-        'nom_id' => $nom_id,
-        'type' => $array['plan_type'] == 'pred' ? PROD_PLAN_TYPE_PRED : PROD_PLAN_TYPE_OPER,
-        'load' => $load,
-      ]);
-    }
+    // в заявках план или Предварительный или Оперативный
+    // Утверждённый приходит только в файле плана
+    $plan_rec = prod_plan_record_create([
+      'import_time_ts' => REQUEST_TIME,
+      'month_ts' => $month_start,
+      'nom_id' => $nom_id,
+      'type' => $array['plan_type'] == 'pred' ? PROD_PLAN_TYPE_PRED : PROD_PLAN_TYPE_OPER,
+      'load' => $load,
+    ]);
 
     // Так как нужно подсвечивать, с чьей стороны возник риск срыва,
     // создать системное сообщение для клиента для следующих причин:
@@ -485,6 +487,11 @@ function prod_message_import($array)
         'author' => PROD_MESSAGE_AUTHOR_SYS_CLIENT,
         'warning' => PROD_WARNING_RED,
       ]);
+    }
+
+    // Из-за возможного дублирования Сообщений из 1С нужно перед созданием искать их по 1c_id
+    if ($message = prod_message_get_by_1c_id($message_id_1c)) {
+      entity_delete('message', $message->id);
     }
 
     $message = prod_message_create([
@@ -521,10 +528,10 @@ function prod_message_import($array)
       if ($service_load) {
         // удалить старую сервисную запись
         // история плана не нужна, поэтому достаточно текущей записи.
-        prod_plan_record_delete_service($month_start);
+        prod_plan_record_delete($month_start, PROD_SERVICE_NOM_ID);
 
         prod_plan_record_create([
-          'import_time_ts' => REQUEST_TIME,
+          'import_time_ts' => $created,
           'month_ts' => $month_start,
           'nom_id' => PROD_SERVICE_NOM_ID,                          // сервисная запись отличается только Номенклатурой
           'type' => $array['plan_type'] == 'pred' ? PROD_PLAN_TYPE_PRED : PROD_PLAN_TYPE_OPER,
