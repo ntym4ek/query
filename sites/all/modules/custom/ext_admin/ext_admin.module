@@ -100,10 +100,11 @@ function ext_admin_process_migration()
   $queue = DrupalQueue::get('ext_admin_queue_worker');
   $queue->deleteQueue();
   return;
+
   // список для очереди пока только за 2025
   for ($i=1; $i<=12; $i++) {
     $counter = 0;
-    $month_start = gmmktime(0, 0, 0, $i, 1, 2024);
+    $month_start = gmmktime(0, 0, 0, $i, 1, 2025);
 
     prod_message_delete_all($month_start);
     prod_plan_record_delete_all($month_start);

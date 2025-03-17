@@ -238,16 +238,18 @@ function prod_plan_import($array)
   if (is_array($array) && !empty($array['load'])) {
     $month_start = helper_datetime_to_timestamp($array['month']);
 
-    //  если есть утверждённый план, импорт запретить
-    if (prod_plan_has_approved($month_start)) {
-      watchdog('import', 'Утверждённый план уже загружен. Импорт плана %month не выполнен.', ['%month' => $array['month']], WATCHDOG_ERROR);
+    $plan_type = PROD_PLAN_TYPE_PRED;
+    if ($array['type'] == 'appr') $plan_type = PROD_PLAN_TYPE_APPR;
+    if ($array['type'] == 'oper') $plan_type = PROD_PLAN_TYPE_OPER;
 
-      // уведомить об ошибке для устранения причин
+    if (prod_plan_has_approved($month_start)) {
+      if      ($plan_type == PROD_PLAN_TYPE_PRED)  $err_message = 'Импорт Плана. Попытка импорта предварительного плана при наличии утверждённого на ' . $array['month'] . '.';
+    } elseif  ($plan_type == PROD_PLAN_TYPE_OPER)  $err_message = 'Импорт Плана. Попытка импорта оперативного плана при отсутствии утверждённого на ' . $array['month'] . '.';
+
+    if ($err_message) {
+      watchdog('import', $err_message, [], WATCHDOG_ERROR);
       drupal_mail('system', 'mail', 'mega_comp@mail.ru', language_default(), array(
-        'context' => array(
-          'subject' => 'Производство Агрохимикат. Ошибка импорта',
-          'message' => 'Утверждённый план уже загружен. Импорт плана ' . $array['month'] . ' не выполнен. Возможно, в базе есть ошибочные утверждённые заявки плана, которые не дают импортировать реальный план.',
-        )
+        'context' => ['subject' => 'Производство Агрохимикат. Ошибка импорта', 'message' => $err_message]
       ));
       return false;
     }
@@ -296,7 +298,7 @@ function prod_plan_import($array)
         'import_time_ts' => REQUEST_TIME,
         'month_ts' => $month_start,
         'nom_id' => $plan_item['nom_id'],
-        'type' => $array['type'] == 'appr' ? PROD_PLAN_TYPE_APPR : PROD_PLAN_TYPE_PRED,
+        'type' => $plan_type,
         'load' => $plan_item['load'],
       ]);
 
@@ -339,7 +341,7 @@ function prod_plan_import($array)
           'import_time_ts' => REQUEST_TIME,
           'month_ts' => $month_start,
           'nom_id' => PROD_SERVICE_NOM_ID,                          // сервисная запись отличается только Номенклатурой
-          'type' => $array['type'] == 'appr' ? PROD_PLAN_TYPE_APPR : PROD_PLAN_TYPE_PRED,
+          'type' => $plan_type,
           'load' => $service_load,
         ]);
       }
@@ -365,12 +367,11 @@ function prod_message_import($array)
 {
   $message_id_1c  = empty($array["ID_1c"]) ? '' : $array["ID_1c"];
 
-
   $month_start  = helper_datetime_to_timestamp($array['month']);
   $err_message = '';
   if (prod_plan_has_approved($month_start)) {
-    if ($array['plan_type'] == 'pred')            $err_message = 'Импорт Сообщения. Попытка импорта записи предварительного плана при наличии утверждённого на ' . $array['month'] . '. ID 1C cообщения: ' . $message_id_1c;
-  } elseif ($array['plan_type'] == 'oper')        $err_message = 'Импорт Сообщения. Попытка импорта записи оперативного плана при отсутствии утверждённого на ' . $array['month'] . '. ID 1C cообщения: ' . $message_id_1c;
+    if ($array['plan_type'] == 'pred')            $err_message = 'Импорт Сообщения. Попытка импорта Сообщения предварительного плана при наличии утверждённого на ' . $array['month'] . '. ID 1C cообщения: ' . $message_id_1c;
+  } elseif ($array['plan_type'] == 'oper')        $err_message = 'Импорт Сообщения. Попытка импорта Сообщения оперативного плана при отсутствии утверждённого на ' . $array['month'] . '. ID 1C cообщения: ' . $message_id_1c;
 
   if ($err_message) {
     watchdog('import', $err_message, [], WATCHDOG_ERROR);
@@ -392,21 +393,28 @@ function prod_message_import($array)
   $nom_id       = prod_nomenklatura_get_by_1c_params($nom_id_1c, $nom_artikul)->tid;
   $reason       = prod_reason_get_by_1c_id($array['reason_1c']);
 
-  // получить Загрузку, общий Объём и Дату начала выпуска
-  $load = [];
-  $volume = $date = 0;
-  if (!empty($array['load'])) {
-    foreach($array['load'] as $item) {
-      $produce_unit = prod_produce_unit_get_by_1c_id($item['unit_id_1c']);
-      $day_start = helper_datetime_to_timestamp($item['date']);
-      if (!isset($load[$produce_unit->tid])) $load[$produce_unit->tid] = [
-        'pu_tid' => $produce_unit->tid,
-        'pu_load' => [],
-      ];
-      $volume += $item['output'];
-      $output = $item['output'];
-      $load[$produce_unit->tid]['pu_load'][$day_start] = $output;
-      if (!$date || $date > $day_start) $date = $day_start;
+  // общий Объём и Дата начала выпуска
+  $volume = empty($array['volume']) ? 0 : $array['volume'];
+  $date = empty($array['date']) ? 0 : helper_datetime_to_timestamp($array['date']);
+  $schedule = empty($array['schedule']) ? 0 : $array['schedule']; // было ли изменение графика выпуска
+
+  // (уст.) получить Загрузку, общий Объём и Дату начала выпуска
+  if (false) {
+    $load = [];
+    $volume = $date = 0;
+    if (!empty($array['load'])) {
+      foreach($array['load'] as $item) {
+        $produce_unit = prod_produce_unit_get_by_1c_id($item['unit_id_1c']);
+        $day_start = helper_datetime_to_timestamp($item['date']);
+        if (!isset($load[$produce_unit->tid])) $load[$produce_unit->tid] = [
+          'pu_tid' => $produce_unit->tid,
+          'pu_load' => [],
+        ];
+        $volume += $item['output'];
+        $output = $item['output'];
+        $load[$produce_unit->tid]['pu_load'][$day_start] = $output;
+        if (!$date || $date > $day_start) $date = $day_start;
+      }
     }
   }
 
@@ -419,7 +427,7 @@ function prod_message_import($array)
   }
     // если нет Записей плана, то это Включение в план или Отказ
   if (empty($plan_rec_prev_info)) {
-    if ($load)              $changes[] = PROD_CHANGE_ADD_TO_PLAN;             // внесение в план
+    if ($volume)            $changes[] = PROD_CHANGE_ADD_TO_PLAN;             // внесение в план
     // если по инициативе клиента
     elseif($reason->tid == 553) {
                             $changes[] = PROD_CHANGE_CANCEL;                  // отмена
@@ -444,7 +452,7 @@ function prod_message_import($array)
           if ($plan_rec_prev_info['date'] != $date) {
                             $changes[] = PROD_CHANGE_DATE;                   // изменение даты начала
           }
-          elseif ($plan_rec_prev_info['load'] != $load) {
+          elseif ($schedule) {
                             $changes[] = PROD_CHANGE_SCHEDULE;               // изменение графика выпуска
           }
         }
@@ -461,18 +469,18 @@ function prod_message_import($array)
 
   // создать записи плана и сообщения
   try {
-    // удалить предыдущие Записи плана по Ном и Месяцу, кроме Утвержденного плана
-    prod_plan_record_delete($month_start, $nom_id);
-
-    // в заявках план или Предварительный или Оперативный
-    // Утверждённый приходит только в файле плана
-    $plan_rec = prod_plan_record_create([
-      'import_time_ts' => REQUEST_TIME,
-      'month_ts' => $month_start,
-      'nom_id' => $nom_id,
-      'type' => $array['plan_type'] == 'pred' ? PROD_PLAN_TYPE_PRED : PROD_PLAN_TYPE_OPER,
-      'load' => $load,
-    ]);
+//    // удалить предыдущие Записи плана по Ном и Месяцу, кроме Утвержденного плана
+//    prod_plan_record_delete($month_start, $nom_id);
+//
+//    // в заявках план или Предварительный или Оперативный
+//    // Утверждённый приходит только в файле плана
+//    $plan_rec = prod_plan_record_create([
+//      'import_time_ts' => REQUEST_TIME,
+//      'month_ts' => $month_start,
+//      'nom_id' => $nom_id,
+//      'type' => $array['plan_type'] == 'pred' ? PROD_PLAN_TYPE_PRED : PROD_PLAN_TYPE_OPER,
+//      'load' => $load,
+//    ]);
 
     // Так как нужно подсвечивать, с чьей стороны возник риск срыва,
     // создать системное сообщение для клиента для следующих причин:
@@ -503,17 +511,17 @@ function prod_message_import($array)
       'parent_id' => !empty($parent_id) ? $parent_id : null,
       'changes' => !empty($changes) ? $changes : [],
       'reason' => !empty($reason) ? $reason->tid : null,
-      'plan_rec' => !empty($plan_rec) ? $plan_rec->id : null,
+//      'plan_rec' => !empty($plan_rec) ? $plan_rec->id : null,
       'author' => PROD_MESSAGE_AUTHOR_PROD,
       'params' => $params,
       'warning' => !empty($warning) ? $warning : null,
     ]);
 
-    // если пришла Занятость
+    // (уст.) если пришла Занятость
     // upd Занятость должна приходить в Сообщениях с оперативным планом,
     // так как при изменении предварительного плана он каждый раз выгружается вместе с Занятостью,
     // а после утверждения плана он больше не приходит.
-    if (!empty($array['service'])) {
+    if (false && !empty($array['service'])) {
       $service_load = [];
       foreach($array['service'] as $item) {
         $produce_unit = prod_produce_unit_get_by_1c_id($item['unit_id_1c']);

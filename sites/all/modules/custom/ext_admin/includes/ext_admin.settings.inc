@@ -7,11 +7,6 @@ function ext_admin_settings_form($form, &$form_state)
     '#type' => 'checkbox',
     '#default_value' => variable_get('import_pr_1с_enable', 0),
   ];
-  $form['import_wh_1с_enable'] = [
-    '#title' => 'Склад. Включить импорт из 1с',
-    '#type' => 'checkbox',
-    '#default_value' => variable_get('import_wh_1с_enable', 0),
-  ];
   $form['client_email_enable'] = array(
     '#type' => 'checkbox',
     '#title' => 'Включить e-mail рассылку с уведомлениями (иначе только имитация в лог)',

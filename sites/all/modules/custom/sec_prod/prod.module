@@ -108,10 +108,12 @@ function prod_import_processors_alter(&$processors)
     $processors['first_queue'][] =  ['mask' => '/^prod_ust.*\.json/',                  'include' => $path . 'prod.import.inc', 'func' => 'prod_produce_units_import', 'archive' => 'prod/prod'];
     $processors['first_queue'][] =  ['mask' => '/^prod_cause.*\.json/',                'include' => $path . 'prod.import.inc', 'func' => 'prod_changes_import', 'archive' => 'prod/prod'];
     $processors['first_queue'][] =  ['mask' => '/^prod_nom.*\.json/',                  'include' => $path . 'prod.import.inc', 'func' => 'prod_nomenklatura_import', 'archive' => 'prod/prod'];
-    $processors['first_queue'][] =  ['mask' => '/^prod_message_import_pred_.*\.json/', 'include' => $path . 'prod.import.inc', 'func' => 'prod_message_import', 'archive' => 'prod/prod'];
 
-    $processors['last_queue'][]  =  ['mask' => '/^prod_plan.*\.json/',                 'include' => $path . 'prod.import.inc', 'func' => 'prod_plan_import', 'archive' => 'prod/prod'];
+    $processors['first_queue'][] =  ['mask' => '/^prod_message_import_pred_.*\.json/', 'include' => $path . 'prod.import.inc', 'func' => 'prod_message_import', 'archive' => 'prod/prod'];
+    $processors['last_queue'][]  =  ['mask' => '/^prod_plan_pred.*\.json/',            'include' => $path . 'prod.import.inc', 'func' => 'prod_plan_import', 'archive' => 'prod/prod'];
+
     $processors['last_queue'][]  =  ['mask' => '/^prod_message_import_oper_.*\.json/', 'include' => $path . 'prod.import.inc', 'func' => 'prod_message_import', 'archive' => 'prod/prod'];
+    $processors['last_queue'][]  =  ['mask' => '/^prod_plan_oper.*\.json/',            'include' => $path . 'prod.import.inc', 'func' => 'prod_plan_import', 'archive' => 'prod/prod'];
   }
 }
 

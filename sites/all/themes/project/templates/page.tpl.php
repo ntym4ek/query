@@ -6,8 +6,8 @@
     <div class="branding">
       <div class="logo"><a href="/"><img src="/sites/all/themes/project/images/logo/logo_t.png" alt="KCCC GROUP" /></a></div>
       <div class="brand">
-        <div class="name nowrap"><a href="/">KCCC GROUP</a></div>
-        <div class="site-name"><a href="/"><?php print $site_name; ?></a></div>
+        <div class="name nowrap">KCCC GROUP</div>
+        <div class="site-name">Производство</div>
       </div>
     </div>
     <div class="menu-mobile-wr">
@@ -26,7 +26,7 @@
               <div class="branding">
                 <div class="brand">
                   <div class="name"><a href="/">KCCC GROUP</a></div>
-                  <div class="site-name"><a href="/"><?php print $site_name; ?></a></div>
+                  <div class="site-name">Производство</div>
                 </div>
                 <div class="logo"><a href="/"><img src="/sites/all/themes/project/images/logo/logo_t.png" alt="KCCC GROUP" /></a></div>
               </div>
