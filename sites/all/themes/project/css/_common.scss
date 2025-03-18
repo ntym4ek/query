@@ -159,6 +159,19 @@ body {
   .logo { height: 100%; }
 }
 
+#back-to-top {
+  background: #fff;
+  border-radius: 50px;
+  border: .5rem solid #213A6E8A;
+  .icon {
+    color: $brand-primary; font-size: 3rem;
+  }
+
+  @media #{$pad} {
+    .icon { font-size: 2rem; }
+  }
+}
+
 // - Оформление полей --------------------------------------------------------------------------------------------------
 .field {
   margin-bottom: 1rem;

@@ -125,7 +125,7 @@
       </div>
     </div>
 
+    <div id="back-to-top"><i class="icon icon-17"></i></div>
   </div>
-
 </div>
 
