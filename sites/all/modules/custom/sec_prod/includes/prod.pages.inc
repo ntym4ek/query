@@ -2,6 +2,8 @@
 
 function prod_nom_list_form($form, &$form_state)
 {
+  drupal_set_title('Номенклатура');
+
   // дефолтные значения из сессии или текущие
   $month_default    = ext_user_get_session_setting('page_nom_list_month') ?? date('n');
   $year_default     = ext_user_get_session_setting('page_nom_list_year') ?? date('Y');
@@ -200,7 +202,8 @@ function prod_nom_list_form_callback($form, $form_values)
 
 function prod_nom_page($nom_id, $month_start)
 {
-  drupal_set_title('');
+  drupal_set_title('Продукт');
+
   $output = '';
 
   $nom_info = prod_nomenklatura_get_info($nom_id);

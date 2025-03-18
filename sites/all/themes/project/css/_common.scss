@@ -134,6 +134,26 @@ body {
   }
 }
 
+.page-banner {
+  .screen-width { height: 200px; }
+  .banner-title-wrapper {
+    display: flex; align-items: flex-end;
+    height: 100%;
+    padding-bottom: 2rem;
+  }
+  .banner-title {
+    display: flex; align-items: center;
+    text-transform: uppercase;
+  }
+
+  @media #{$tablet} {
+    .screen-width { height: 230px; }
+    .banner-title {
+      font-size: 2rem;
+    }
+  }
+}
+
 .page-footer {
   .branding { height: 60px; }
   .logo { height: 100%; }

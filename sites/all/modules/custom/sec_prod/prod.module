@@ -35,7 +35,7 @@ const PROD_WARNING_RED = 2;
 function prod_menu()
 {
   $items['production/nomenklatura'] = [
-    'title' => 'Список номенклатуры',
+    'title' => 'Номенклатура',
     'page callback' => 'drupal_get_form',
     'page arguments' => ['prod_nom_list_form'],
     'access callback' => true,
@@ -44,7 +44,7 @@ function prod_menu()
 //    'menu_name' => 'main-menu',
   ];
   $items['production/nomenklatura/%/%'] = [
-    'title' => 'Страница номенклатуры',
+    'title' => 'Продукт',
     'page callback' => 'prod_nom_page',
     'page arguments' => [2, 3],
     'access callback' => true,
@@ -1292,6 +1292,4 @@ function prod_query_migrate($qid)
     watchdog('migration', 'Неудачно. %error (%id)', ['%id' => $query_wr->getIdentifier(), '%error' => $error], WATCHDOG_ERROR);
   }
 }
-
-
 
