@@ -99,7 +99,7 @@ function ext_admin_process_migration()
 {
   $queue = DrupalQueue::get('ext_admin_queue_worker');
   $queue->deleteQueue();
-//  return;
+  return;
 
   // список для очереди пока только за 2025
   for ($i=1; $i<=12; $i++) {

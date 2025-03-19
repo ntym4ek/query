@@ -102,7 +102,7 @@ function prod_cron()
  */
 function prod_import_processors_alter(&$processors)
 {
-  return;
+//  return;
   if (variable_get('import_pr_1с_enable', 0)) {
     $path = drupal_get_path('module', 'prod') . '/includes/';
     $processors['first_queue'][] =  ['mask' => '/^prod_dav.*\.json/',                  'include' => $path . 'prod.import.inc', 'func' => 'prod_client_import', 'archive' => 'prod/prod'];
@@ -329,7 +329,7 @@ function prod_message_get_info($mid)
 
 /**
  * Вернуть последние включённые в план значения Даты и Объёма выпуска
- * Используется в истории Сообщений
+ * Используется в истории Сообщений.
  * @param $month_start
  * @param $nom_id
  * @return array
@@ -338,19 +338,19 @@ function prod_message_get_last_date_volume($month_start, $nom_id)
 {
   $date_last = null;
   $volume_last = 0;
-  if ($plan_rec_last = prod_plan_record_get_last($month_start, $nom_id)) {
-    $plan_rec_last_info = prod_plan_record_get_info($plan_rec_last->id);
-    $date_last = $plan_rec_last_info['date'];
-    $volume_last = $plan_rec_last_info['volume'];
-  }
-
-//  if ($message_last = prod_message_get_last($month_start, $nom_id)) {
-//    $message_last_info = prod_message_get_info($message_last->id);
-//    if (!$plan_rec_last) {
-//      $date_last = $message_last_info['params']['date']['to'];
-//      $volume_last = $message_last_info['params']['volume']['to'];
-//    }
+//  if ($plan_rec_last = prod_plan_record_get_last($month_start, $nom_id)) {
+//    $plan_rec_last_info = prod_plan_record_get_info($plan_rec_last->id);
+//    $date_last = $plan_rec_last_info['date'];
+//    $volume_last = $plan_rec_last_info['volume'];
 //  }
+
+  // берём из Сообщений, так Сообщения импортируются последовательно,
+  // а каждый последующий файл Плана затирает предыдущий и история может стать некорректной
+  if ($message_last = prod_message_get_last($month_start, $nom_id)) {
+    $message_last_info = prod_message_get_info($message_last->id);
+    $date_last = $message_last_info['params']['date']['to'];
+    $volume_last = $message_last_info['params']['volume']['to'];
+  }
 
   return [
     'date' => $date_last,
@@ -520,12 +520,21 @@ function prod_plan_record_get_info($id)
   ];
 }
 
-function prod_plan_record_delete_all($month_ts = null)
+/**
+ * Удалить Записи плана, все или за месяц
+ * с возможностью сохранения только Записей утверждённого плана
+ * @param $month_ts
+ * @param $keep_appr - сохранить Утверждённый план
+ */
+function prod_plan_record_delete_all($month_ts = null, $keep_appr = false)
 {
   $efquery = new EntityFieldQuery();
   $efquery->entityCondition('entity_type', 'plan');
   if ($month_ts) {
     $efquery->fieldCondition('field_pp_month', 'value', $month_ts);
+  }
+  if ($keep_appr) {
+    $efquery->fieldCondition('field_pp_type', 'value', PROD_PLAN_TYPE_APPR, '!=');
   }
   $result = $efquery->execute();
   if ($result) {
@@ -1130,6 +1139,7 @@ function prod_query_migrate($qid)
     $load = drupal_json_decode($query_wr->field_load_json->value());
 
     // чтобы определить, какое изменение произошло, сравним с прошлым изменением плана
+    // (не меняем на определение по последнему Сообщению, так как здесь идёт сравнение загрузки установок ['load'])
     if ($plan_rec_prev = prod_plan_record_get_last($query_wr->field_month->value(), $query_wr->field_nomenklatura->getIdentifier())) {
       $plan_rec_prev_info = prod_plan_record_get_info($plan_rec_prev->id);
     }
@@ -1165,7 +1175,7 @@ function prod_query_migrate($qid)
         $type = PROD_PLAN_TYPE_OPER;
       }
 
-      // удалить все записи, кроме утверждённого плана
+      // удалить все предыдущие Записи плана по Номенклатуре, кроме утверждённого плана
       prod_plan_record_delete($query_wr->field_month->value(), $query_wr->field_nomenklatura->getIdentifier());
 
       // создать Запись плана

@@ -290,11 +290,14 @@ function prod_plan_import($array)
     }
 
     // удалить все Записи плана на месяц, включая сервисную запись
-    prod_plan_record_delete_all($month_start);
+    // но сохранить утверждённый план
+    prod_plan_record_delete_all($month_start, true);
 
     // добавление Плана на месяц
     $user_mails = [];
     foreach ($plan as $plan_item) {
+      prod_plan_record_delete($month_start, $plan_item['nom_id']);
+
       $plan_rec = prod_plan_record_create([
         'import_time_ts' => REQUEST_TIME,
         'month_ts' => $month_start,
@@ -419,74 +422,66 @@ function prod_message_import($array)
     }
   }
 
-  // определить, какие произошли Изменения
-  $changes = [];
-  $volume_from = $date_from = null;
-    // предыдущая Запись плана
-  if ($plan_rec_prev = prod_plan_record_get_last($month_start, $nom_id)) {
-    $plan_rec_prev_info = prod_plan_record_get_info($plan_rec_prev->id);
-  }
-    // если нет Записей плана, то это Включение в план или Отказ
-  if (empty($plan_rec_prev_info)) {
-    if ($volume)            $changes[] = PROD_CHANGE_ADD_TO_PLAN;             // внесение в план
-    // если по инициативе клиента
-    elseif($reason->tid == 553) {
-                            $changes[] = PROD_CHANGE_CANCEL;                  // отмена
-    } else                  $changes[] = PROD_CHANGE_DENY;                    // отказ
-  }
-    // если есть Записи плана
-  else {
-    $volume_from = $plan_rec_prev_info['volume'];
-    $date_from = $plan_rec_prev_info['date'];
-    if ($volume == 0) {
-                            $changes[] = PROD_CHANGE_CANCEL;                  // отмена выпуска
-    } else {
-      if ($plan_rec_prev_info['volume'] == 0) {
-                            $changes[] = PROD_CHANGE_ADD_TO_PLAN;             // снова внесение в план
-      }
-      else {
-        if ($plan_rec_prev_info['volume'] != $volume) {
-                            $changes[] = PROD_CHANGE_VOLUME;                  // изменение объёма
+  try {
+    // Из-за возможного дублирования Сообщений из 1С нужно перед созданием искать их по 1c_id
+    // Но так как определение изменений идёт по последнему сообщению, то удалить нужно раньше, чем будем искать последнее Сообщение
+    if ($message = prod_message_get_by_1c_id($message_id_1c)) {
+      entity_delete('message', $message->id);
+    }
+
+    // определить, какие произошли Изменения
+    $changes = [];
+    // предыдущее Сообщение
+    $message_prev = prod_message_get_last($month_start, $nom_id);
+    // последние значения даты и объёма
+    $date_vol_last = prod_message_get_last_date_volume($month_start, $nom_id);
+
+      // если нет Записей плана, то это Включение в план или Отказ
+    if (empty($message_prev)) {
+      if ($volume)            $changes[] = PROD_CHANGE_ADD_TO_PLAN;             // внесение в план
+      // если по инициативе клиента
+      elseif($reason->tid == 553) {
+                              $changes[] = PROD_CHANGE_CANCEL;                  // отмена
+      } else                  $changes[] = PROD_CHANGE_DENY;                    // отказ
+    }
+      // если есть Записи плана
+    else {
+      if ($volume == 0) {
+                              $changes[] = PROD_CHANGE_CANCEL;                  // отмена выпуска
+      } else {
+        if ($date_vol_last['volume'] == 0) {
+                              $changes[] = PROD_CHANGE_ADD_TO_PLAN;             // снова внесение в план
         }
-        // вместе с изменением Объёма может быть изменение Даты или Графика
-        if ($date) {
-          if ($plan_rec_prev_info['date'] != $date) {
-                            $changes[] = PROD_CHANGE_DATE;                   // изменение даты начала
+        else {
+          if ($date_vol_last['volume'] != $volume) {
+                              $changes[] = PROD_CHANGE_VOLUME;                  // изменение объёма
           }
-          elseif ($schedule) {
-                            $changes[] = PROD_CHANGE_SCHEDULE;               // изменение графика выпуска
+          // вместе с изменением Объёма может быть изменение Даты или Графика
+          if ($date) {
+            if ($date_vol_last['date'] != $date) {
+                              $changes[] = PROD_CHANGE_DATE;                   // изменение даты начала
+            }
+            elseif ($schedule) {
+                              $changes[] = PROD_CHANGE_SCHEDULE;               // изменение графика выпуска
+            }
           }
         }
       }
     }
-  }
-  if (!$changes) {
-    watchdog('import', 'Импорт Сообщения. Не определено Изменение Сообщение %message_id_1c', ['%message_id_1c' => $message_id_1c],WATCHDOG_WARNING);
-  }
+    if (!$changes) {
+      watchdog('import', 'Импорт Сообщения. Не определено Изменение Сообщение %message_id_1c', ['%message_id_1c' => $message_id_1c],WATCHDOG_WARNING);
+    }
 
-  // сохранить изменения объёма и даты в массиве параметров
-  $params['volume'] = ['from' => $volume_from, 'to' => $volume];
-  $params['date'] = ['from' => $date_from, 'to' => $date];
+    // сохранить изменения объёма и даты в массиве параметров
+    $params['volume'] = ['from' => $date_vol_last['volume'], 'to' => $volume];
+    $params['date'] = ['from' => $date_vol_last['date'], 'to' => $date];
 
-  // создать записи плана и сообщения
-  try {
-//    // удалить предыдущие Записи плана по Ном и Месяцу, кроме Утвержденного плана
-//    prod_plan_record_delete($month_start, $nom_id);
-//
-//    // в заявках план или Предварительный или Оперативный
-//    // Утверждённый приходит только в файле плана
-//    $plan_rec = prod_plan_record_create([
-//      'import_time_ts' => REQUEST_TIME,
-//      'month_ts' => $month_start,
-//      'nom_id' => $nom_id,
-//      'type' => $array['plan_type'] == 'pred' ? PROD_PLAN_TYPE_PRED : PROD_PLAN_TYPE_OPER,
-//      'load' => $load,
-//    ]);
+    // создать Сообщение
 
-    // Так как нужно подсвечивать, с чьей стороны возник риск срыва,
-    // создать системное сообщение для клиента для следующих причин:
-    //  - отсутствие сырья
-    //  - отсутствие материалов
+      // Так как нужно подсвечивать, с чьей стороны возник риск срыва,
+      // создать системное сообщение для клиента для следующих причин:
+      //  - отсутствие сырья
+      //  - отсутствие материалов
     if ($reason && in_array($reason->tid, [551, 552])) {
       prod_message_create([
         'created' => $created-1,   // сообщение должно размещаться до сообщения от производства
@@ -496,11 +491,6 @@ function prod_message_import($array)
         'author' => PROD_MESSAGE_AUTHOR_SYS_CLIENT,
         'warning' => PROD_WARNING_RED,
       ]);
-    }
-
-    // Из-за возможного дублирования Сообщений из 1С нужно перед созданием искать их по 1c_id
-    if ($message = prod_message_get_by_1c_id($message_id_1c)) {
-      entity_delete('message', $message->id);
     }
 
     $message = prod_message_create([
