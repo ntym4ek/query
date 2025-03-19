@@ -102,6 +102,7 @@ function prod_cron()
  */
 function prod_import_processors_alter(&$processors)
 {
+  return;
   if (variable_get('import_pr_1с_enable', 0)) {
     $path = drupal_get_path('module', 'prod') . '/includes/';
     $processors['first_queue'][] =  ['mask' => '/^prod_dav.*\.json/',                  'include' => $path . 'prod.import.inc', 'func' => 'prod_client_import', 'archive' => 'prod/prod'];
@@ -1164,6 +1165,9 @@ function prod_query_migrate($qid)
         $type = PROD_PLAN_TYPE_OPER;
       }
 
+      // удалить все записи, кроме утверждённого плана
+      prod_plan_record_delete($query_wr->field_month->value(), $query_wr->field_nomenklatura->getIdentifier());
+
       // создать Запись плана
       $plan_rec = prod_plan_record_create([
         'import_time_ts' => $query_wr->created->value(),
@@ -1274,7 +1278,7 @@ function prod_query_migrate($qid)
         '1c_id' => $query_wr->field_oc_id->value(),
         'changes' => $changes,
         'reason' => $reason,
-        'plan_rec' => isset($plan_rec) ? $plan_rec->id : null,
+//        'plan_rec' => isset($plan_rec) ? $plan_rec->id : null,
         'author' => $author,
         'params' => $params,
       ]);
