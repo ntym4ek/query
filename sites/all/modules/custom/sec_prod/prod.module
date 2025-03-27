@@ -38,16 +38,18 @@ function prod_menu()
     'title' => 'Номенклатура',
     'page callback' => 'drupal_get_form',
     'page arguments' => ['prod_nom_list_form'],
-    'access callback' => true,
+    'access callback' => 'ext_user_has_roles',
+    'access arguments' => [[ADMIN_RID, CLIENT_RID, MANAGER_RID]],
     'file' => 'includes/prod.pages.inc',
     'type' => MENU_NORMAL_ITEM,
-//    'menu_name' => 'main-menu',
+    'menu_name' => 'main-menu',
   ];
   $items['production/nomenklatura/%/%'] = [
     'title' => 'Продукт',
     'page callback' => 'prod_nom_page',
     'page arguments' => [2, 3],
-    'access callback' => true,
+    'access callback' => 'ext_user_has_roles',
+    'access arguments' => [[ADMIN_RID, CLIENT_RID, MANAGER_RID]],
     'file' => 'includes/prod.pages.inc',
     'type' => MENU_NORMAL_ITEM,
   ];
@@ -55,7 +57,8 @@ function prod_menu()
     'title' => 'Новое сообщение',
     'page callback' => 'drupal_get_form',
     'page arguments' => ['prod_message_add_form', 3, 4],
-    'access callback' => true,
+    'access callback' => 'ext_user_has_roles',
+    'access arguments' => [[ADMIN_RID, CLIENT_RID]],
     'file' => 'includes/prod.pages.inc',
     'type' => MENU_NORMAL_ITEM,
   ];
@@ -63,10 +66,11 @@ function prod_menu()
     'title' => 'План на сезон',
     'page callback' => 'drupal_get_form',
     'page arguments' => ['prod_year_plan_form'],
-    'access callback' => true,
+    'access callback' => 'ext_user_has_roles',
+    'access arguments' => [[ADMIN_RID, CLIENT_RID, MANAGER_RID]],
     'file' => 'includes/prod.pages.inc',
     'type' => MENU_NORMAL_ITEM,
-//    'menu_name' => 'main-menu',
+    'menu_name' => 'main-menu',
   );
 
   return $items;

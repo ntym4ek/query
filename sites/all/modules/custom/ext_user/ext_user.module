@@ -3,10 +3,12 @@
 define('ROLE_ADMIN', '3');
 define('ROLE_MANAGER_PRODUCTION', '4');
 define('ROLE_USER_PRODUCTION', '6');
-define('ROLE_MANAGER_WAREHOUSE', '7');
-define('ROLE_USER_WAREHOUSE', '5');
-
-define('COMPANY_TD', 3151);
+const ADMIN_RID = 3;
+const MANAGER_PRODUCTION_RID = 4;
+const USER_PRODUCTION_RID = 6;
+const CLIENT_RID = 7;
+const MANAGER_RID = 8;
+const COMPANY_TD = 3151;
 
 
 /**
@@ -164,11 +166,11 @@ function ext_user_get_companies_by_user($user = null)
   $tids = [];
   $user_wr = entity_metadata_wrapper('user', $user);
   // для клиентов и менеджеров, у кого задан список компаний
-  if (user_has_role(ROLE_USER_PRODUCTION) || (user_has_role(ROLE_MANAGER_PRODUCTION) && count($user_wr->field_user_companies->raw()))) {
+  if ((ext_user_has_roles([USER_PRODUCTION_RID, CLIENT_RID]) || ext_user_has_roles([MANAGER_PRODUCTION_RID, MANAGER_RID])) && count($user_wr->field_user_companies->raw())) {
     $tids = $user_wr->field_user_companies->raw();
   }
   // для менеджеров без списка компаний вывести все
-  elseif (user_has_role(ROLE_MANAGER_PRODUCTION)) {
+  elseif (ext_user_has_roles([ROLE_MANAGER_PRODUCTION, MANAGER_RID])) {
     $query = db_select('taxonomy_term_data', 't');
     $query ->condition('t.vid', taxonomy_vocabulary_machine_name_load('clients')->vid);
     $query ->fields('t', ['tid']);
@@ -229,4 +231,17 @@ function ext_user_store_session_setting($name, $value)
 function ext_user_get_session_setting($name)
 {
   return $_SESSION[$name] ?? null;
+}
+
+/**
+ * Определить наличие роли у текущего пользователя
+ * @param $rids - массив ID ролей
+ * @return bool
+ */
+function ext_user_has_roles($rids)
+{
+  $account = $GLOBALS['user'];
+  $account_rids = array_keys($account->roles);
+
+  return (bool)array_intersect($rids, $account_rids);
 }
