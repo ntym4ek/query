@@ -93,7 +93,7 @@ function prod_nom_list_form($form, &$form_state)
             'plan_rec' => null,
           ];
 
-          $nom_arr[$nomid]['warning'] = prod_nomenklatura_get_warning($month_start, $nomid);
+          $nom_arr[$nomid]['warning'] = prod_nomenklatura_get_warnings($month_start, $nomid)['last_warning'];
 
           if ($message_last = prod_message_get_last($month_start, $nomid)) {
             $nom_arr[$nomid]['message'] = prod_message_get_info($message_last->id);
@@ -228,7 +228,7 @@ function prod_nom_page($nom_id, $month_start)
   if ($plan_rec = prod_plan_record_get_last($month_start, $nom_id)) {
     $plan_rec_info = prod_plan_record_get_info($plan_rec->id);
 
-    if ($plan_rec_info['load']) {
+    if ($plan_rec_info['load'] && $plan_rec_info["volume"]) {
       $volume = 0;
       $output_pu = '<div class="produce-units">' .
                       '<div class="produce-units-list">';
@@ -258,9 +258,15 @@ function prod_nom_page($nom_id, $month_start)
 
   // определить наличие Предупреждений
   $class_warn = '';
-  if ($warning = prod_nomenklatura_get_warning($month_start, $nom_id)) {
-    if ($warning == PROD_WARNING_YELLOW) $class_warn = ' warn-yellow';
-    if ($warning == PROD_WARNING_RED) $class_warn = ' warn-red';
+  $warning_text = '';
+  $warnings = prod_nomenklatura_get_warnings($month_start, $nom_id);
+  if ($warnings['last_warning']) {
+    if ($warnings['last_warning'] == PROD_WARNING_YELLOW) $class_warn = ' warn-yellow';
+    if ($warnings['last_warning'] == PROD_WARNING_RED)    $class_warn = ' warn-red';
+
+    // текст предупреждения
+    $warning_message_info = prod_message_get_info(array_keys($warnings['list'])[0]);
+    $warning_text = $warning_message_info["comment"];
   }
 
   // определить доступные Действия
@@ -290,16 +296,31 @@ function prod_nom_page($nom_id, $month_start)
   // сформировать вывод
   $output .=  '<div class="nom-page">';
   $output .=    '<div class="n-header' . $class_warn . '">';
-  $output .=      '<div class="n-title">';
-  $output .=        $field_title;
+  $output .=      '<div class="n-row">';
+  $output .=        '<div class="n-title">';
+  $output .=          $field_title;
+  $output .=        '</div>';
+  $output .=        '<div class="n-month">';
+  $output .=          $field_month;
+  $output .=        '</div>';
+  $output .=        '<div class="n-volume">';
+  $output .=          $field_volume;
+  $output .=        '</div>';
   $output .=      '</div>';
-  $output .=      '<div class="n-month">';
-  $output .=        $field_month;
-  $output .=      '</div>';
-  $output .=      '<div class="n-volume">';
-  $output .=        $field_volume;
-  $output .=      '</div>';
+  if ($warning_text) {
+//    $output .=    '<div class="n-row">';
+//    $output .=      '<div class="n-notes1">';
+//    $output .=        'Причина предупреждения: ' . drupal_strtolower($warning_text);
+//    $output .=      '</div>';
+//    $output .=    '</div>';
+  }
   $output .=    '</div>';
+
+  if ($warning_text) {
+    $output .=      '<div class="n-notes' . $class_warn . '">';
+    $output .=        'Причина предупреждения: ' . drupal_strtolower($warning_text);
+    $output .=      '</div>';
+  }
 
   $output .=    '<div class="n-plan">';
   $output .=      $output_pu;

@@ -410,28 +410,32 @@ function prod_message_export($message_id)
 }
 
 /**
- * Вернуть тип Предупреждения из Сообщений для Номенклатуры, если есть
+ * Вернуть список id Сообщений с предупреждениями и определить последнее
  * @param $month_start
  * @param $nom_id
  */
-function prod_nomenklatura_get_warning($month_start, $nom_id)
+function prod_nomenklatura_get_warnings($month_start, $nom_id)
 {
-  $warning = 0;
-
+  $warnings = [
+    'list' => [],
+    'last_warning' => 0,
+  ];
   $dbr = db_select('field_data_field_m_warning', 'fw');
   $dbr->condition('fw.field_m_warning_value', [PROD_WARNING_YELLOW, PROD_WARNING_RED], 'IN');
   $dbr->innerJoin('field_data_field_m_month', 'fm', 'fm.entity_id = fw.entity_id');
   $dbr->condition('fm.field_m_month_value', $month_start);
   $dbr->innerJoin('field_data_field_m_nomenklatura', 'fn', 'fn.entity_id = fw.entity_id');
   $dbr->condition('fn.field_m_nomenklatura_target_id', $nom_id);
+  $dbr->addField('fw', 'entity_id', 'mid');
   $dbr->addField('fw', 'field_m_warning_value', 'warning');
+  $dbr->orderBy('mid', 'DESC');
   $dbr->distinct();
-  if ($result = $dbr->execute()->fetchAllAssoc('warning')) {
-    if (isset($result[PROD_WARNING_RED])) $warning = PROD_WARNING_RED;
-    elseif (isset($result[PROD_WARNING_YELLOW])) $warning = PROD_WARNING_YELLOW;
+  if ($result = $dbr->execute()->fetchAllKeyed()) {
+    $warnings['list'] = $result;
+    $warnings['last_warning'] = array_values($result)[0];
   }
 
-  return $warning;
+  return $warnings;
 }
 
 /**

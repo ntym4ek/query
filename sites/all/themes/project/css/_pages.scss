@@ -75,9 +75,9 @@
     color: $brand-blue;
     background: $brand-bg-blue;
     border-radius: 5px;
-    display: flex;
-    padding: 2rem; margin: 2rem 0 3rem;
+    padding: 2rem; margin: 2rem 0;
     .field { margin-bottom: 0; }
+    .n-row { display: flex; }
     .n-title {
       flex: auto;
       padding-right: 2rem;
@@ -98,7 +98,19 @@
       background-color: $brand-bg-red;
       color: $brand-red;
     }
+    .n-notes1 {
+      padding-top: 1rem;
+    }
   }
+
+  .n-notes {
+    border-radius: 5px;
+    padding: 1rem;
+    margin-bottom: 2rem;
+    &.warn-yellow { background-color: $brand-bg-orange; }
+    &.warn-red { background-color: $brand-bg-red; color: $brand-red; }
+  }
+
   .n-plan {
     margin-bottom: 3rem;
     padding: 0 2rem;
