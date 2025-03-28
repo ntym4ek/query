@@ -87,6 +87,8 @@ function ext_user_form_user_login_alter(&$form, &$form_state)
   unset($form['pass']['#description']);
   $form["actions"]["submit"]['#value'] = t('Log in');
   $form["actions"]["submit"]['#attributes']['class'] = ['btn', 'btn-brand', 'btn-wide'];
+
+  $form["#submit"][] = 'ext_user_user_profile_form_submit';
 }
 
 /**
@@ -133,10 +135,10 @@ function ext_user_form_user_profile_form_alter(&$form, &$form_state)
       $form["timezone"]["#access"] = false;
       $form["account"]["mail"]["#access"] = false;
     }
-    if (!user_has_roles([ROLE_MANAGER_PRODUCTION, MANAGER_RID])) {
+    if (!ext_user_has_roles([ROLE_MANAGER_PRODUCTION, MANAGER_RID])) {
       $form["field_notify_query"]["#access"] = false;
     }
-    if (!user_has_roles([ROLE_USER_PRODUCTION, CLIENT_RID])) {
+    if (!ext_user_has_roles([ROLE_USER_PRODUCTION, CLIENT_RID])) {
       $form["field_notify_once_a_day"]["#access"] = false;
     }
 
@@ -144,9 +146,10 @@ function ext_user_form_user_profile_form_alter(&$form, &$form_state)
   }
 }
 
-function ext_user_form_user_profile_form_submit($form, &$form_state)
+function ext_user_user_profile_form_submit($form, &$form_state)
 {
-  $form_state['redirect'] = empty($form_state["user"]->uid) ? 'user' : 'user/' . $form_state["user"]->uid;
+  // после смены пароля редирект на главную
+  $form_state['redirect'] = '<front>';
 }
 
 /**

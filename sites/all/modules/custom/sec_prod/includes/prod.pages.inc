@@ -2,7 +2,7 @@
 
 function prod_nom_list_form($form, &$form_state)
 {
-  drupal_set_title('Номенклатура');
+//  drupal_set_title('Номенклатура');
 
   // дефолтные значения из сессии или текущие
   $month_default    = ext_user_get_session_setting('page_nom_list_month') ?? date('n');
@@ -25,7 +25,7 @@ function prod_nom_list_form($form, &$form_state)
   $month_start = gmmktime(0, 0, 0, $month, 1, $year);
 
   if (user_has_role(CLIENT_RID))
-    $button_add = '<a class="btn btn-primary autodialog" data-dialog-width="650" href="/production/message/add/0/' . $month_start . '">Новая заявка на выпуск</a>';
+    $button_add = '<a class="btn btn-primary autodialog" data-dialog-width="650" href="/production/message/add/0/' . $month_start . '">Новая заявка</a>';
 
   $form = [
     '#prefix' => '<div id="nom-list-form-wrapper" class="nom-list-page">' .
@@ -216,8 +216,6 @@ function prod_nom_list_form_callback($form, $form_values)
 
 function prod_nom_page($nom_id, $month_start)
 {
-  drupal_set_title('Продукт');
-
   $output = '';
 
   $nom_info = prod_nomenklatura_get_info($nom_id);
@@ -350,28 +348,37 @@ function prod_nom_page($nom_id, $month_start)
   return $output;
 }
 
-function prod_message_add_form($form, $form_state, $nomenklatura_id = null, $month_start = null)
+function prod_message_add_form($form, &$form_state, $nomenklatura_id = null, $month_start = null)
 {
   // Выполняемые ниже проверки:
   //  - своя номенклатура,
   //  - корректность задания начала месяца,
 
   // тема Сообщения (запрос на производство, смену даты, объёма и т.д.)
-  if (!$nomenklatura_id) $subject = 'add';
+  if (!$nomenklatura_id) {
+    $subject = 'add';
+    drupal_set_title('Новая заявка на выпуск');
+  }
   else $subject = $_GET['subject'] ?? '';
 
   // дата, начиная с которой возможно начало производства
   // определяется PROD_DAYS_BEFORE_PRODUCE_START
   $permitted_date_start = helper_get_day_start_from_timestamp() + PROD_DAYS_BEFORE_PRODUCE_START * 24*60*60;
 
-  // для запроса на новое производство добавить можно только месяц в который попадает дата начала производства (выше)
+  // если сменился месяц или год, заменить дату начала производства
+  if (in_array($form_state['triggering_element']['#name'], ['month', 'year'])) {
+    $month_start = gmmktime(0, 0,0, $form_state['values']['month'], 1, $form_state['values']['year']);
+  }
+
+  // для запроса на новое производство добавить можно не раньше месяца, в который попадает дата начала производства (выше)
   if ($subject == 'add') {
-    $month_start = helper_get_month_start_from_timestamp($permitted_date_start);
+    if ($month_start < helper_get_month_start_from_timestamp($permitted_date_start)) $month_start = helper_get_month_start_from_timestamp($permitted_date_start);
   }
   // или просто проверить timestamp начала месяца на корректность
   else {
     $month_start = helper_get_month_start_from_timestamp($month_start);
   }
+
 
   $intro = '';
 
@@ -384,7 +391,7 @@ function prod_message_add_form($form, $form_state, $nomenklatura_id = null, $mon
   // если не задана Номенклатура, то это Сообщение о заявке на Новый продукт
   $companies = ext_user_get_companies_by_user();
   if (!$nomenklatura_id) {
-    $intro = '<p>Чтобы добавить заявку на выпуск продукта, выберите номенклатуру, задайте месяц, дату начала и объём производства.</p>';
+    $intro = '<p>Чтобы добавить заявку на выпуск продукта, выберите номенклатуру, задайте дату начала и объём производства.</p>';
 
     // подготовить список Номенклатуры клиента (если несколько компаний, то последовательно)
     $options = [];
@@ -398,12 +405,12 @@ function prod_message_add_form($form, $form_state, $nomenklatura_id = null, $mon
       }
 
       // исключить уже добавленную на месяц номенклатуру
-      if ($month_start) {
-        $nom_list_month = prod_nomenklatura_get_list_by_messages(['month_ts' => $month_start]);
-        foreach ($nom_list_month as $nom) {
-          unset($options[$nom->nom_id]);
-        }
-      }
+//      if ($month_start) {
+//        $nom_list_month = prod_nomenklatura_get_list_by_messages(['month_ts' => $month_start]);
+//        foreach ($nom_list_month as $nom) {
+//          unset($options[$nom->nom_id]);
+//        }
+//      }
     }
   } else {
     $nom_info = production_nomenklatura_get_info($nomenklatura_id);
@@ -438,31 +445,34 @@ function prod_message_add_form($form, $form_state, $nomenklatura_id = null, $mon
   $month = $form_values["values"]["month"] ?? ($month_start ? date('n', $month_start) : date('n'));
   $year = $form_values["values"]["year"] ?? ($month_start ? date('Y', $month_start) : date('Y'));
 
-  $month_opts = [];
-  for($i = 1; $i <= 12; $i++) {
-    $month_opts[$i] = helper_month_label_ru($i);
+  if ($subject == 'add') {
+    $form['month']['#markup'] = '<div class="row"><div class="col-xs-12 col-md-5"><div class="month-select-wrapper"></div></div>';
+  } else {
+    $form['month']['month'] = [
+      '#title' => 'Месяц',
+      '#type' => 'select',
+      '#options' => [$month => helper_month_label_ru($month)],
+      '#default_value' => $month,
+      '#disabled' => $subject != 'add',
+      '#prefix' => '<div class="row"><div class="col-xs-12 col-md-5"><div class="month-select-wrapper">',
+      '#ajax' => [
+        'callback' => 'prod_message_add_callback',
+        'wrapper' => 'message-add-wrapper',
+      ],
+    ];
+    $form['month']['year'] = [
+      '#title' => 'Год',
+      '#type' => 'select',
+      '#options' => [$year =>$year],
+      '#default_value' => $year,
+      '#disabled' => $subject != 'add',
+      '#suffix' => '</div></div>',
+      '#ajax' => [
+        'callback' => 'prod_message_add_callback',
+        'wrapper' => 'message-add-wrapper',
+      ],
+    ];
   }
-  $form['month']['month'] = [
-    '#title' => 'Месяц',
-    '#type' => 'select',
-    '#options' => $month_opts,
-    '#default_value' => $month,
-    '#disabled' => $subject != 'add',
-    '#prefix' => '<div class="row"><div class="col-xs-12 col-md-5"><div class="month-select-wrapper">',
-  ];
-  $year_opts = [];
-  for($i = 0; $i <= 2; $i++) {
-    $yr = date('Y') + $i;
-    $year_opts[$yr] = $yr;
-  }
-  $form['month']['year'] = [
-    '#title' => 'Год',
-    '#type' => 'select',
-    '#options' => $year_opts,
-    '#default_value' => $year,
-    '#disabled' => $subject != 'add',
-    '#suffix' => '</div></div>',
-  ];
 
   // если добавление Номенклатуры или возобновление, после отмены
   $date_vol_last = prod_message_get_last_date_volume($month_start, $nomenklatura_id);
@@ -490,6 +500,13 @@ function prod_message_add_form($form, $form_state, $nomenklatura_id = null, $mon
     '#date_year_range' => '0:+1',
     '#date_label_position' => 'invisible',
   ];
+  // если дата была изменена после смены месяца/года, то '#default_value' не сработает
+  // и нужно менять $form_state
+  if (in_array($form_state['triggering_element']['#name'], ['month', 'year'])) {
+    $form_state["input"]["date"]["date"] = date('d.m.Y', $date_start);
+    $form_state["values"]["date"] = date('Y-m-d', $date_start);
+  }
+
 
   $form['volume'] = [
     '#type' => 'textfield',
@@ -556,36 +573,48 @@ function prod_message_add_form_validate($form, &$form_state)
   if (!$form["date"]["#disabled"]) {
     // если date required, то проверить, изменено ли значение
     if ($form_state['values']['subject'] == 'date' && $form["date"]["#required"] && date('Y-m-d', strtotime($form_state['values']['date'])) == $form["date"]["#default_value"]) {
-      form_set_error('date', 'Задайте новую дату начала выпуска в соответствующем поле.');
+      form_set_error('date', 'Вы выбрали действие "Перенести дату выпуска". Задайте новую дату в соответствующем поле.');
       return false;
     }
     // дата не может быть меньше минимального периода до начала производства
     $permitted_day_start = helper_get_day_start_from_timestamp() + PROD_DAYS_BEFORE_PRODUCE_START * 24 * 60 * 60;
     if (helper_get_day_start_from_timestamp(strtotime($form_state['values']['date'])) < $permitted_day_start) {
-      form_set_error('date', 'Дата не может быть ранее ' . date('d.m.Y', $permitted_day_start)) . ' г.';
+      form_set_error('date', 'Дата начала выпуска не может быть ранее, чем ' . date('d.m.Y', $permitted_day_start)) . ' г.';
       return false;
     }
-    // todo если это новая заявка на производство, то заданный месяц/год не может быть меньше $permitted_day_start
+    // дата для переноса даты не должна быть раньше текущего месяца
+    if ($form_state['values']['subject'] != 'add') {
+      $month_start = gmmktime(0, 0, 0, $form_state['values']['month'], 1, $form_state['values']['year']);
+      if (strtotime($form_state['values']['date']) < $month_start) {
+        form_set_error('date', 'Нельзя перенести выпуск в предыдущие месяцы. Создайте новую заявку на странице списка заявок.');
+        return false;
+      }
+    }
   }
 
   if (!$form["volume"]["#disabled"]) {
     // если volume required, то проверить, изменено ли значение
     if ($form_state['values']['subject'] == 'volume' && $form["volume"]["#required"] && $form_state['values']['volume'] == $form["volume"]["#default_value"]) {
-      form_set_error('volume', 'Задайте новый объём выпуска в соответствующем поле.');
+      form_set_error('volume', 'Вы выбрали действие "Изменить объём выпуска". Задайте новый объём в соответствующем поле.');
       return false;
     }
     // объём не может быть нулевым или отрицательным, кроме отмены
     if ($form_state['values']['subject'] != 'cancel' && $form_state['values']['volume'] <= 0) {
-      form_set_error('volume', 'Задайте объём выпуска продукта. Для отмены выпуска выберите соответствующую заявку в блоке Действия');
+      form_set_error('volume', 'Вы выбрали действие "Изменить объём выпуска". Задайте объём выпуска отличный от нуля. Для отмены выпуска выберите соответствующее действие.');
       return false;
     }
   }
 
   if ($form_state['values']['subject'] == 'docs' && empty($form_state['values']['docs'])) {
-    form_set_error('docs', 'Добавьте документы.');
+    form_set_error('docs', 'Добавьте хотя бы один файл или отмените действие.');
     return false;
   }
 
+  // для $subject == add определить месяц/год
+  if ($form_state['values']['subject'] == 'add') {
+    $form_state['values']['month'] = date('n', strtotime($form_state['values']['date']));
+    $form_state['values']['year'] = date('Y', strtotime($form_state['values']['date']));
+  }
 }
 function prod_message_add_form_submit($form, &$form_state)
 {
@@ -661,8 +690,8 @@ function prod_message_add_form_submit($form, &$form_state)
     'files' => $files,
   ]);
 
-  // todo экспортировать Сообщение
-//  prod_message_export($message->id);
+  // экспортировать Сообщение
+  prod_message_export($message->id);
 
   // todo тестирование отправки письма
 //  drupal_mail('mailer', 'client_send_imported_message_mail', 'mega_comp@mail.ru', 'ru', ['message_id' => $message->id]);

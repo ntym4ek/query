@@ -35,7 +35,7 @@ const PROD_WARNING_RED = 2;
 function prod_menu()
 {
   $items['production/nomenklatura'] = [
-    'title' => 'Номенклатура',
+    'title' => 'Заявки на производство',
     'page callback' => 'drupal_get_form',
     'page arguments' => ['prod_nom_list_form'],
     'access callback' => 'ext_user_has_roles',
@@ -45,7 +45,7 @@ function prod_menu()
     'menu_name' => 'main-menu',
   ];
   $items['production/nomenklatura/%/%'] = [
-    'title' => 'Продукт',
+    'title' => 'Заявка на выпуск продукта',
     'page callback' => 'prod_nom_page',
     'page arguments' => [2, 3],
     'access callback' => 'ext_user_has_roles',
@@ -668,7 +668,7 @@ function prod_nomenklatura_get_by_artikul($artikul_1c)
 }
 
 /**
- * Вернуть список Номенклатуры по заданным параметрам в массиве $params
+ * Вернуть сортированный список Номенклатуры по заданным параметрам в массиве $params
  * 'company_ids' - массив id компаний
  *
  * @return array - краткая информация по Ном
@@ -683,6 +683,7 @@ function prod_nomenklatura_get_list($params)
   $dbr->addField('t', 'tid', 'nom_id');
   $dbr->addField('fc', 'field_client_tid', 'company_id');
   $dbr->distinct();
+  $dbr->orderBy('t.name');
   $result = $dbr->execute()->fetchAllAssoc('nom_id');
 
   return $result;
