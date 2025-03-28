@@ -822,7 +822,8 @@ function production_nomenklatura_get_info($nom_tid)
         'artikul' => '',
         'name_d' => '',
         'artikul_d' => '',
-        'client_id' => 0,
+        'client_id' => 0, // уст.
+        'company_id' => 0,
       ];
     } else {
       $nom_wr = entity_metadata_wrapper('taxonomy_term', $nom_tid);
@@ -846,7 +847,8 @@ function production_nomenklatura_get_info($nom_tid)
           'artikul' => $artikul,
           'name_d' => $name_d,
           'artikul_d' => $artikul_d,
-          'client_id' => $client_id,
+          'client_id' => $client_id, // уст.
+          'company_id' => $client_id,
         ];
       }
     }

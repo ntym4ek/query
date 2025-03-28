@@ -96,9 +96,9 @@ function prod_cron()
 {
   // todo однократно после восьми отправить письмо с изменениями (при пятиминутном интервале крона)
   // todo кривое решение, может не сработать если сервер не дёрнет крон в этот промежуток
-  //if (REQUEST_TIME >= strtotime('07:27') && REQUEST_TIME < strtotime('07:34')) {
-    // mailer_prod_mail_daily();
-  //}
+  if (REQUEST_TIME >= strtotime('07:27') && REQUEST_TIME < strtotime('07:34')) {
+     mailer_prod_mail_daily();
+  }
 }
 
 /**
@@ -776,7 +776,8 @@ function prod_nomenklatura_get_info($nom_id)
         'artikul' => '',
         'name_d' => '',
         'artikul_d' => '',
-        'client_id' => 0,
+        'client_id' => 0, // уст.
+        'company_id' => 0,
       ];
     } else {
       $nom_wr = entity_metadata_wrapper('taxonomy_term', $nom_id);
@@ -800,7 +801,8 @@ function prod_nomenklatura_get_info($nom_id)
           'artikul' => $artikul,
           'name_d' => $name_d,
           'artikul_d' => $artikul_d,
-          'client_id' => $client_id,
+          'client_id' => $client_id, // уст.
+          'company_id' => $client_id,
         ];
       }
     }

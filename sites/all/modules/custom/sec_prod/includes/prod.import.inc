@@ -507,46 +507,15 @@ function prod_message_import($array)
       'params' => $params,
       'warning' => !empty($warning) ? $warning : null,
     ]);
-
-    // (уст.) если пришла Занятость
-    // upd Занятость должна приходить в Сообщениях с оперативным планом,
-    // так как при изменении предварительного плана он каждый раз выгружается вместе с Занятостью,
-    // а после утверждения плана он больше не приходит.
-    if (false && !empty($array['service'])) {
-      $service_load = [];
-      foreach($array['service'] as $item) {
-        $produce_unit = prod_produce_unit_get_by_1c_id($item['unit_id_1c']);
-        $day_start = helper_datetime_to_timestamp($item['date']);
-        if (!isset($service_load[$produce_unit->tid])) $service_load[$produce_unit->tid] = [
-          'pu_tid' => $produce_unit->tid,
-          'pu_load' => [],
-        ];
-        $service_load[$produce_unit->tid]['pu_load'][$day_start] = 0;
-      }
-
-      if ($service_load) {
-        // удалить старую сервисную запись
-        // история плана не нужна, поэтому достаточно текущей записи.
-        prod_plan_record_delete($month_start, PROD_SERVICE_NOM_ID);
-
-        prod_plan_record_create([
-          'import_time_ts' => $created,
-          'month_ts' => $month_start,
-          'nom_id' => PROD_SERVICE_NOM_ID,                          // сервисная запись отличается только Номенклатурой
-          'type' => $array['plan_type'] == 'pred' ? PROD_PLAN_TYPE_PRED : PROD_PLAN_TYPE_OPER,
-          'load' => $service_load,
-        ]);
-      }
-    }
   } catch (Exception $e) {
     watchdog('import', 'Ошибка при сохранении сообщения %message_id_1c. %errmess', ['%errmess' => $e->getMessage(), '%message_id_1c' => $message_id_1c],WATCHDOG_ERROR);
     return false;
   }
 
 
-  // todo уведомить клиентов о новой заявке
+  // уведомить клиентов о новой заявке
   $nom_info = prod_nomenklatura_get_info($nom_id);
-  if (false && $message && $users = ext_user_get_users_by_company_id($nom_info)) {
+  if ($message && $users = ext_user_get_users_by_company_id($nom_info['company_id'], CLIENT_RID)) {
     foreach ($users as $user) {
       // получить настройку пользователя для Номенклатуры/Месяца
       $user_settings = variable_get('user_settings_' . $GLOBALS['user']->uid);
@@ -557,6 +526,9 @@ function prod_message_import($array)
       if ($mail_by_nom && $mail_immediatelly) {
         drupal_mail('mailer', 'client_send_imported_message_mail', $user->mail, user_preferred_language($user), ['message_id' => $message->id]);
       }
+
+      // todo тестирование отправки письма
+//      drupal_mail('mailer', 'client_send_imported_message_mail', 'mega_comp@mail.ru', 'ru', ['message_id' => $message->id]);
     }
   }
 

@@ -2,8 +2,6 @@
 
 function prod_nom_list_form($form, &$form_state)
 {
-//  drupal_set_title('Номенклатура');
-
   // дефолтные значения из сессии или текущие
   $month_default    = ext_user_get_session_setting('page_nom_list_month') ?? date('n');
   $year_default     = ext_user_get_session_setting('page_nom_list_year') ?? date('Y');
@@ -366,7 +364,7 @@ function prod_message_add_form($form, &$form_state, $nomenklatura_id = null, $mo
   $permitted_date_start = helper_get_day_start_from_timestamp() + PROD_DAYS_BEFORE_PRODUCE_START * 24*60*60;
 
   // если сменился месяц или год, заменить дату начала производства
-  if (in_array($form_state['triggering_element']['#name'], ['month', 'year'])) {
+  if (isset($form_state['triggering_element']['#name']) && in_array($form_state['triggering_element']['#name'], ['month', 'year'])) {
     $month_start = gmmktime(0, 0,0, $form_state['values']['month'], 1, $form_state['values']['year']);
   }
 
@@ -502,7 +500,7 @@ function prod_message_add_form($form, &$form_state, $nomenklatura_id = null, $mo
   ];
   // если дата была изменена после смены месяца/года, то '#default_value' не сработает
   // и нужно менять $form_state
-  if (in_array($form_state['triggering_element']['#name'], ['month', 'year'])) {
+  if ($form_state['triggering_element']['#name'] && in_array($form_state['triggering_element']['#name'], ['month', 'year'])) {
     $form_state["input"]["date"]["date"] = date('d.m.Y', $date_start);
     $form_state["values"]["date"] = date('Y-m-d', $date_start);
   }
@@ -692,9 +690,6 @@ function prod_message_add_form_submit($form, &$form_state)
 
   // экспортировать Сообщение
   prod_message_export($message->id);
-
-  // todo тестирование отправки письма
-//  drupal_mail('mailer', 'client_send_imported_message_mail', 'mega_comp@mail.ru', 'ru', ['message_id' => $message->id]);
 
   // если это первый запрос по Номенклатуре, установить настройку уведомления по email для пользователя
   $user_settings = variable_get('user_settings_' . $GLOBALS['user']->uid);

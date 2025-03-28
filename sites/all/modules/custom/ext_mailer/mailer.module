@@ -256,9 +256,9 @@ function mailer_prod_mail_daily()
     // поставить в очередь на отправку
     $mail_queue = DrupalQueue::get('daily_mails_queue');
     foreach ($messages_by_companies_by_nom as $company_id => $company) {
-      if ($users = ext_user_get_users_by_company_id($company_id)) {
+      if ($users = ext_user_get_users_by_company_id($company_id, CLIENT_RID)) {
         foreach ($users as $user) {
-          // получить настройку: отправлять сразу или раз в сутки
+          // клиент должен иметь настройку: получать письма раз в сутки
           if ($mail_daily = !empty($user->field_notify_once_a_day["und"][0]["value"])) {
             $mail_queue->createItem(['uid' => $user->uid, 'email' => $user->mail ,'data' => $company]);
           }
