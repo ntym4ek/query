@@ -49,10 +49,44 @@ function ext_user_preprocess_menu_link(&$vars)
 /**
  * Implements hook_form_FORM_ID_alter().
  */
+function ext_user_form_user_pass_alter(&$form, &$form_state)
+{
+  if (!user_has_role(ADMIN_RID)) {
+    $form['#prefix'] = '<div class="user-auth-form-wrapper">';
+    $form['#prefix'] .= '<h1>' . t('Recover password') . '</h1>';
+    $form['#prefix'] .= '<div class="user-links">' . t('or') .  ' <a href="' . url('user/login') . '">' . t('Log in') . '</a></div>';
+    $form['#suffix'] = '</div>';
+    $form["mail"]["#markup"] = t('The recovery link will be sent to E-Mail above.');
+    $form["actions"]["submit"]['#value'] = t('Send me link');
+    $form["actions"]["submit"]['#attributes']['class'] = ['btn', 'btn-brand', 'btn-wide'];
+
+    array_unshift($form['#submit'], 'ext_user_user_pass_submit');
+  }
+}
+
+function ext_user_user_pass_submit($form, $form_state)
+{
+  // запишем фразу с переводом
+  variable_set('user_password_reset_text', t(variable_get('user_password_reset_text')));
+}
+
+/**
+ * Implements hook_form_FORM_ID_alter().
+ */
 function ext_user_form_user_login_alter(&$form, &$form_state)
 {
+  $form['#prefix'] =  '<div class="user-auth-form-wrapper">';
+  $form['#prefix'] .=   '<h1>' . t('Log in') . '</h1>';
+  $form['#prefix'] .=   '<div class="user-links">' . t('or') .  ' <a href="' . url('user/password') . '">' . t('Recover password') . '</a></div>';
+  $form['#suffix'] =  '</div>';
+
   $form['name']['#title'] = t('E-Mail');
   $form['name']['#element_validate'][] = 'ext_user_login_name_validate';
+  $form["pass"]["#title"] = t('Password');
+  unset($form['name']['#description']);
+  unset($form['pass']['#description']);
+  $form["actions"]["submit"]['#value'] = t('Log in');
+  $form["actions"]["submit"]['#attributes']['class'] = ['btn', 'btn-brand', 'btn-wide'];
 }
 
 /**
@@ -76,27 +110,37 @@ function ext_user_login_name_validate($form, &$form_state)
  */
 function ext_user_form_user_profile_form_alter(&$form, &$form_state)
 {
-  if (!user_has_role(ROLE_ADMIN)) {
-    $form["account"]["pass"]["#title"] = t('Password');
-    $form["account"]["pass"]["#type"] = 'password';
+  // в профиле оставляем только смену пароля
+  if (!user_has_role(ADMIN_RID)) {
+    $form["actions"]["submit"]['#attributes']['class'] = ['btn', 'btn-brand'];
+    $form["actions"]["submit"]['#value'] = 'Сохранить';
 
-
-    if (isset($form["field_wwork_limit"]["#access"])) $form["field_wwork_limit"]["#access"] = false; // уст.
-    if (isset($form["field_company"]["#access"])) $form["field_company"]["#access"] = false; // уст.
-    if (isset($form["field_oc_davalec_id"]["#access"])) $form["field_oc_davalec_id"]["#access"] = false; // уст.
-    $form["field_user_company"]["#access"] = false; // уст.
     $form["field_user_companies"]["#access"] = false;
-    $form["locale"]["#access"] = false;
-    $form["mimemail"]["#access"] = false;
-    $form["timezone"]["#access"] = false;
-    if (!user_has_role(ROLE_MANAGER_PRODUCTION)) {
+
+    if ($form["#user_category"] == 'account') {
+      $form['#prefix'] =  '<div class="user-auth-form-wrapper">';
+      $form['#prefix'] .=   '<h1>Смена пароля</h1>';
+      $form['#suffix'] =  '</div>';
+      if (isset($form["account"]["pass"])) {
+        $form["account"]["current_pass"]["#title"] = 'Старый пароль';
+        $form["account"]["current_pass"]["#description"] = 'Для смены сначала введите текущий пароль';
+        $form["account"]["pass"]["#title"] = 'Новый пароль';
+        $form["account"]["pass"]["#description"] = '';
+        $form["account"]["pass"]["#type"] = 'password';
+      }
+      $form["locale"]["#access"] = false;
+      $form["mimemail"]["#access"] = false;
+      $form["timezone"]["#access"] = false;
+      $form["account"]["mail"]["#access"] = false;
+    }
+    if (!user_has_roles([ROLE_MANAGER_PRODUCTION, MANAGER_RID])) {
       $form["field_notify_query"]["#access"] = false;
     }
-    if (!user_has_role(ROLE_USER_PRODUCTION)) {
+    if (!user_has_roles([ROLE_USER_PRODUCTION, CLIENT_RID])) {
       $form["field_notify_once_a_day"]["#access"] = false;
     }
 
-    $form["#submit"][] = 'ext_user_form_user_profile_form_submit';
+    $form["#submit"][] = 'ext_user_user_profile_form_submit';
   }
 }
 
@@ -244,4 +288,15 @@ function ext_user_has_roles($rids)
   $account_rids = array_keys($account->roles);
 
   return (bool)array_intersect($rids, $account_rids);
+}
+
+
+function ext_user_process_page(&$vars)
+{
+  if (arg(0) == 'user') {
+    $vars['title'] = '';
+    if (isset($vars["tabs"])) {
+      unset($vars["tabs"]);
+    }
+  }
 }
