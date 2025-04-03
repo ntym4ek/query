@@ -164,7 +164,10 @@ function prod_message_create($params)
 
 /**
  * Вернуть массив сообщений для Номнклатуры и Месяца
- * с обратной сортировкой под дате.
+ * с обратной сортировкой id.
+ * По дате создания 1с не подойдёт, так как в 1с может быть следующее:
+ *   id_1c: 26819, создано в 1с: 31.03.2025 11:57:37
+ *   id_1c: 26936, создано в 1с: 31.03.2025 03:21:06
  * @param $month_start
  * @param $nom_id
  */
@@ -174,7 +177,7 @@ function prod_message_get_all($month_ts, $nom_id)
   $efQuery->entityCondition('entity_type', 'message');
   $efQuery->fieldCondition('field_m_month', 'value', $month_ts);
   $efQuery->fieldCondition('field_m_nomenklatura', 'target_id', $nom_id);
-  $efQuery->propertyOrderBy('created', 'DESC');
+  $efQuery->propertyOrderBy('id', 'DESC');
   if ($efResult = $efQuery->execute()) {
     $entities = entity_load('message', array_keys($efResult['message']));
   }
