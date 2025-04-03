@@ -292,7 +292,6 @@ function prod_nom_page($nom_id, $month_start)
   // сформировать вывод
   $output .=  '<div class="nom-page">';
   $output .=    '<div class="n-header' . $class_warn . '">';
-  $output .=      '<div class="n-row">';
   $output .=        '<div class="n-title"' . (variable_get('ext_admin_debug', 0) ? ' title="' . $nom_info["id_1c"] . '"' : '') . '>';
   $output .=          $field_title;
   $output .=        '</div>';
@@ -302,14 +301,6 @@ function prod_nom_page($nom_id, $month_start)
   $output .=        '<div class="n-volume">';
   $output .=          $field_volume;
   $output .=        '</div>';
-  $output .=      '</div>';
-  if ($warning_text) {
-//    $output .=    '<div class="n-row">';
-//    $output .=      '<div class="n-notes1">';
-//    $output .=        'Причина предупреждения: ' . drupal_strtolower($warning_text);
-//    $output .=      '</div>';
-//    $output .=    '</div>';
-  }
   $output .=    '</div>';
 
   if ($warning_text) {
@@ -719,14 +710,14 @@ function prod_nom_page_settings_form($form, $form_state, $month_start, $nom_id)
     'month_start' => ['#type' => 'hidden', '#value' => $month_start],
   ];
 
-  // найти настройки для номенклатуры, если нет, то не уведомлять
+  // найти настройки для номенклатуры, если не настроено пользователем, то уведомлять
   $user_settings = variable_get('user_settings_' . $GLOBALS['user']->uid);
-  $default = (bool)($user_settings['mail'][$nom_id] ?? false);
+  $default = !isset($user_settings['mail'][$nom_id]) || $user_settings['mail'][$nom_id];
 
   $form['mail'] = [
     '#type' => 'checkbox',
     '#name' => 'mail',
-    '#title' => 'уведомлять на e-mail об изменениях по продукту',
+    '#title' => 'уведомлять по e-mail об изменениях по продукту',
     '#default_value' => $default,
     '#ajax' => [
       'callback' => 'prod_nom_page_settings_form_callback',

@@ -499,7 +499,7 @@ function prod_message_import($array)
     foreach ($users as $user) {
       // получить настройку пользователя для Номенклатуры/Месяца
       $user_settings = variable_get('user_settings_' . $GLOBALS['user']->uid);
-      $mail_by_nom = $user_settings['mail'][$nom_id] ?? false;
+      $mail_by_nom = !isset($user_settings['mail'][$nom_id]) || $user_settings['mail'][$nom_id];
       // получить настройку: отправлять сразу или раз в сутки
       $mail_immediatelly = empty($user->field_notify_once_a_day["und"][0]["value"]);
 

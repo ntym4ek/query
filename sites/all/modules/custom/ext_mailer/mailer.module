@@ -295,9 +295,9 @@ function mailer_get_daily_mail_text($params)
   $text = '';
 
   foreach ($params['data']['nom'] as $nom_id => &$months) {
-    // получить настройку пользователя по уведомлениям для Номенклатуры
+    // получить настройку пользователя по уведомлениям для Номенклатуры (по умолчанию отправляем)
     $user_settings = variable_get('user_settings_' . $params['uid']);
-    if (!empty($user_settings['mail'][$nom_id])) {
+    if (!isset($user_settings['mail'][$nom_id]) || $user_settings['mail'][$nom_id]) {
       $nom_info = prod_nomenklatura_get_info($nom_id);
       $text .= '<h2>' . $nom_info['label'] . '</h2>';
 

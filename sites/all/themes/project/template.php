@@ -55,11 +55,8 @@ function project_message($vars)
     $files = implode(', ', $arr);
   }
 
-
-  $message_class = '';
-
-  $output  = "<div class=\"message-row$row_class\">";
-  $output .=   "<div class=\"message$message_class\">";
+  $output  = '<div class="message-row' . $row_class . '">';
+  $output .=   '<div class="message">';
   if ($vars['message_info']['changes']['formatted'])
     $output .=     '<div class="m-change">' . $vars['message_info']['changes']['formatted'] . '</div>';
   if ($vars['message_info']['reason'])
@@ -74,7 +71,6 @@ function project_message($vars)
   if ($vars['message_info']['warning']) {
     $output .=     '<div class="m-warning"></div>';
   }
-
 
   $output .=     '<div class="m-date"' . (variable_get('ext_admin_debug', 0) ? ' title="id: ' . $vars['message_info']['id'] . ' - id_1c: ' . $vars['message_info']['id_1c'] . '"' : '') . '>' . date('d.m.Y H:i', $vars['message_info']['created']) . '</div>';
   $output .=   '</div>';
