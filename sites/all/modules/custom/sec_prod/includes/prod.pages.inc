@@ -293,7 +293,7 @@ function prod_nom_page($nom_id, $month_start)
   $output .=  '<div class="nom-page">';
   $output .=    '<div class="n-header' . $class_warn . '">';
   $output .=      '<div class="n-row">';
-  $output .=        '<div class="n-title">';
+  $output .=        '<div class="n-title"' . (variable_get('ext_admin_debug', 0) ? ' title="' . $nom_info["id_1c"] . '"' : '') . '>';
   $output .=          $field_title;
   $output .=        '</div>';
   $output .=        '<div class="n-month">';
@@ -540,7 +540,6 @@ function prod_message_add_form($form, &$form_state, $nomenklatura_id = null, $mo
       '#autoupload' => TRUE,
       '#upload_validators' => [
         'file_validate_extensions' => array('txt doc docx xls xlsx pdf'),
-//        'my_custom_file_validator' => array('some validation criteria'),
       ],
       '#plupload_settings' => [
         'runtimes' => 'html5',

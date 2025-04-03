@@ -7,6 +7,11 @@ function ext_admin_settings_form($form, &$form_state)
     '#type' => 'checkbox',
     '#default_value' => variable_get('import_pr_1с_enable', 0),
   ];
+  $form['ext_admin_debug'] = array(
+    '#type' => 'checkbox',
+    '#title' => 'Включить режим отладки',
+    '#default_value' => variable_get('ext_admin_debug', 0),
+  );
   $form['client_email_enable'] = array(
     '#type' => 'checkbox',
     '#title' => 'Включить e-mail рассылку с уведомлениями (иначе только имитация в лог)',

@@ -76,14 +76,7 @@ function project_message($vars)
   }
 
 
-  if (true) {
-    // вывести отладочную информацию
-    $output .=      '<div class="m-date"><a title="id: ' . $vars['message_info']['id'] . '">' .
-      date('d.m.Y H:i', $vars['message_info']['created']) .
-      '</a></div>';
-  } else {
-    $output .=     '<div class="m-date">' . date('d.m.Y H:i', $vars['message_info']['created']) . '</div>';
-  }
+  $output .=     '<div class="m-date"' . (variable_get('ext_admin_debug', 0) ? ' title="id: ' . $vars['message_info']['id'] . ' - id_1c: ' . $vars['message_info']['id_1c'] . '"' : '') . '>' . date('d.m.Y H:i', $vars['message_info']['created']) . '</div>';
   $output .=   '</div>';
   $output .= '</div>';
 
@@ -204,7 +197,7 @@ function project_produce_unit($vars)
     '<div class="produce-unit" data-putid="' . $produce_unit['info']['id'] . '">' .
       '<div class="produce-unit-name">' .
       '<label class="label" for="edit-name">Установка</label>' .
-      '<h3>' . $pu_name . '</h3>' .
+      '<h3' . (variable_get('ext_admin_debug', 0) ? ' title="' . $produce_unit["info"]["id_1c"] . '"' : '') . '>' . $pu_name . '</h3>' .
     '</div>' .
     '<div class="produce-unit-dates">' .
       '<label class="label">Даты</label>' .

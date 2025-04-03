@@ -246,7 +246,7 @@ function ext_user_get_company_info($id)
     $info = [
       'id' => $term_wr->getIdentifier(),
       'name' => $term_wr->label(),
-      '1c_id' => $term_wr->field_1c_id->value(),
+      'id_1c' => $term_wr->field_1c_id->value(),
     ];
   }
 

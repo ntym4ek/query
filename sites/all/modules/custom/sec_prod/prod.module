@@ -109,16 +109,16 @@ function prod_import_processors_alter(&$processors)
 //  return;
   if (variable_get('import_pr_1с_enable', 0)) {
     $path = drupal_get_path('module', 'prod') . '/includes/';
-    $processors['first_queue'][] =  ['mask' => '/^prod_dav.*\.json/',                  'include' => $path . 'prod.import.inc', 'func' => 'prod_client_import', 'archive' => 'prod/prod'];
-    $processors['first_queue'][] =  ['mask' => '/^prod_ust.*\.json/',                  'include' => $path . 'prod.import.inc', 'func' => 'prod_produce_units_import', 'archive' => 'prod/prod'];
-    $processors['first_queue'][] =  ['mask' => '/^prod_cause.*\.json/',                'include' => $path . 'prod.import.inc', 'func' => 'prod_changes_import', 'archive' => 'prod/prod'];
-    $processors['first_queue'][] =  ['mask' => '/^prod_nom.*\.json/',                  'include' => $path . 'prod.import.inc', 'func' => 'prod_nomenklatura_import', 'archive' => 'prod/prod'];
+    $processors['first_queue'][] =  ['mask' => '/^prod_dav.*\.json/',                  'include' => $path . 'prod.import.inc', 'func' => 'prod_client_import', 'archive' => 'prod'];
+    $processors['first_queue'][] =  ['mask' => '/^prod_ust.*\.json/',                  'include' => $path . 'prod.import.inc', 'func' => 'prod_produce_units_import', 'archive' => 'prod'];
+    $processors['first_queue'][] =  ['mask' => '/^prod_cause.*\.json/',                'include' => $path . 'prod.import.inc', 'func' => 'prod_changes_import', 'archive' => 'prod'];
+    $processors['first_queue'][] =  ['mask' => '/^prod_nom.*\.json/',                  'include' => $path . 'prod.import.inc', 'func' => 'prod_nomenklatura_import', 'archive' => 'prod'];
 
-    $processors['first_queue'][] =  ['mask' => '/^prod_message_import_pred_.*\.json/', 'include' => $path . 'prod.import.inc', 'func' => 'prod_message_import', 'archive' => 'prod/prod'];
-    $processors['last_queue'][]  =  ['mask' => '/^prod_plan_pred.*\.json/',            'include' => $path . 'prod.import.inc', 'func' => 'prod_plan_import', 'archive' => 'prod/prod'];
+    $processors['first_queue'][] =  ['mask' => '/^prod_message_import_pred_.*\.json/', 'include' => $path . 'prod.import.inc', 'func' => 'prod_message_import', 'archive' => 'prod'];
+    $processors['last_queue'][]  =  ['mask' => '/^prod_plan_pred.*\.json/',            'include' => $path . 'prod.import.inc', 'func' => 'prod_plan_import', 'archive' => 'prod'];
 
-    $processors['last_queue'][]  =  ['mask' => '/^prod_message_import_oper_.*\.json/', 'include' => $path . 'prod.import.inc', 'func' => 'prod_message_import', 'archive' => 'prod/prod'];
-    $processors['last_queue'][]  =  ['mask' => '/^prod_plan_oper.*\.json/',            'include' => $path . 'prod.import.inc', 'func' => 'prod_plan_import', 'archive' => 'prod/prod'];
+    $processors['last_queue'][]  =  ['mask' => '/^prod_message_import_oper_.*\.json/', 'include' => $path . 'prod.import.inc', 'func' => 'prod_message_import', 'archive' => 'prod'];
+    $processors['last_queue'][]  =  ['mask' => '/^prod_plan_oper.*\.json/',            'include' => $path . 'prod.import.inc', 'func' => 'prod_plan_import', 'archive' => 'prod'];
   }
 }
 
@@ -140,7 +140,7 @@ function prod_message_create($params)
     $message_wr->field_m_nomenklatura = $params['nom_id'];
     $message_wr->field_m_author = $params['author'];
     if (!empty($params['parent_id'])) $message_wr->field_m_parent = $params['parent_id'];
-    if (!empty($params['1c_id'])) $message_wr->field_1c_id = $params['1c_id'];
+    if (!empty($params['id_1c'])) $message_wr->field_1c_id = $params['id_1c'];
     if (!empty($params['comment'])) $message_wr->field_comment = $params['comment'];
     if (!empty($params['changes'])) $message_wr->field_m_changes = $params['changes'];
     if (!empty($params['reason'])) $message_wr->field_m_reason = $params['reason'];
@@ -312,6 +312,7 @@ function prod_message_get_info($mid)
 
   return [
     'id' => $mid,
+    'id_1c' => $message_wr->field_1c_id->value(),
     'month' => $message_wr->field_m_month->value(),
     'nom' => [
       'id' => $message_wr->field_m_nomenklatura->getIdentifier(),
@@ -784,7 +785,7 @@ function prod_nomenklatura_get_info($nom_id)
       if ($nom_wr->value()) {
         $name = $nom_wr->label();
         $client_id = $nom_wr->field_client->value() ? $nom_wr->field_client->getIdentifier() : 0;
-        $oc_id = $nom_wr->field_1c_id->value();
+        $id_1c = $nom_wr->field_1c_id->value();
         $artikul = $nom_wr->field_oc_artikul->value();
         $label = $name . ($artikul && $client_id == COMPANY_TD ? ' (' . $artikul . ')' : '');
         $name_d = $nom_wr->field_oc_name_davalec->value();
@@ -797,7 +798,7 @@ function prod_nomenklatura_get_info($nom_id)
           'id' => $nom_id,
           'label' => $label,
           'name' => $name,
-          'id_1c' => $oc_id,
+          'id_1c' => $id_1c,
           'artikul' => $artikul,
           'name_d' => $name_d,
           'artikul_d' => $artikul_d,
@@ -1015,7 +1016,7 @@ function prod_produce_unit_get_info($pu_id)
         'id' => $pu_id,
         'name' => $pu_wr->label(),
         'label' => str_replace('уст.', '', $pu_wr->label()),
-        'oc_id' => $pu_wr->field_oc_produce_unit_id->value(),
+        'id_1c' => $pu_wr->field_oc_produce_unit_id->value(),
         'status' => $pu_wr->field_status->value(),
       ];
     }
@@ -1296,7 +1297,7 @@ function prod_query_migrate($qid)
         'month_ts' => $query_wr->field_month->value(),
         'nom_id' => $query_wr->field_nomenklatura->getIdentifier(),
         'comment' => $query_wr->field_comment->value(),
-        '1c_id' => $query_wr->field_oc_id->value(),
+        'id_1c' => $query_wr->field_oc_id->value(),
         'changes' => $changes,
         'reason' => $reason,
 //        'plan_rec' => isset($plan_rec) ? $plan_rec->id : null,

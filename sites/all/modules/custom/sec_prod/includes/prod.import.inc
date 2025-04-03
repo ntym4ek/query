@@ -402,26 +402,6 @@ function prod_message_import($array)
   $date = empty($array['date']) ? 0 : helper_datetime_to_timestamp($array['date']);
   $schedule = empty($array['schedule']) ? 0 : $array['schedule']; // было ли изменение графика выпуска
 
-  // (уст.) получить Загрузку, общий Объём и Дату начала выпуска
-  if (false) {
-    $load = [];
-    $volume = $date = 0;
-    if (!empty($array['load'])) {
-      foreach($array['load'] as $item) {
-        $produce_unit = prod_produce_unit_get_by_1c_id($item['unit_id_1c']);
-        $day_start = helper_datetime_to_timestamp($item['date']);
-        if (!isset($load[$produce_unit->tid])) $load[$produce_unit->tid] = [
-          'pu_tid' => $produce_unit->tid,
-          'pu_load' => [],
-        ];
-        $volume += $item['output'];
-        $output = $item['output'];
-        $load[$produce_unit->tid]['pu_load'][$day_start] = $output;
-        if (!$date || $date > $day_start) $date = $day_start;
-      }
-    }
-  }
-
   try {
     // Из-за возможного дублирования Сообщений из 1С нужно перед созданием искать их по 1c_id
     // Но так как определение изменений идёт по последнему сообщению, то удалить нужно раньше, чем будем искать последнее Сообщение
@@ -498,7 +478,7 @@ function prod_message_import($array)
       'month_ts' => $month_start,
       'nom_id' => $nom_id,
       'comment' => $comment,
-      '1c_id' => $message_id_1c,
+      'id_1c' => $message_id_1c,
       'parent_id' => !empty($parent_id) ? $parent_id : null,
       'changes' => !empty($changes) ? $changes : [],
       'reason' => !empty($reason) ? $reason->tid : null,

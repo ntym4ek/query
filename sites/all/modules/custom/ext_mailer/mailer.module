@@ -220,8 +220,8 @@ function mailer_prod_mail_daily()
   $efQuery
     ->entityCondition('entity_type', 'message')
     ->propertyCondition('created', [$prev_day_start, $day_start-1], 'BETWEEN')
-    ->fieldCondition('field_m_author', [PROD_MESSAGE_AUTHOR_SYS_PROD, PROD_MESSAGE_AUTHOR_PROD], 'IN')
-    ->fieldCondition('field_m_nomenklatura', PROD_SERVICE_NOM_ID, 'NOT')
+    ->fieldCondition('field_m_author', 'value', [PROD_MESSAGE_AUTHOR_SYS_PROD, PROD_MESSAGE_AUTHOR_PROD],'IN')
+    ->fieldCondition('field_m_nomenklatura', 'target_id', PROD_SERVICE_NOM_ID, 'NOT')
     ->propertyOrderBy('id');
   if ($efResult = $efQuery->execute()) {
 
