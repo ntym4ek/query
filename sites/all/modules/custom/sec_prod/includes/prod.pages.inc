@@ -214,9 +214,13 @@ function prod_nom_list_form_callback($form, $form_values)
 
 function prod_nom_page($nom_id, $month_start)
 {
-  $output = '';
-
+  // todo проверить доступ пользователя к номенклатуре
   $nom_info = prod_nomenklatura_get_info($nom_id);
+  if (!in_array($nom_info['company_id'], array_keys(ext_user_get_companies_by_user()))) {
+    return 'У вас нет доступа к данной записи. Если вы считаете, что это ошибка, свяжитесь с нами по e-mail <a href="mailto:support@kccc.ru">support@kccc.ru</a>';
+  }
+
+  $output = '';
   $volume = null;
 
   // собрать актуальную информацию о состоянии плана производства
@@ -516,14 +520,6 @@ function prod_message_add_form($form, &$form_state, $nomenklatura_id = null, $mo
     '#title' => 'Комментарий к заявке',
   ];
 
-  // предупреждение о рисках
-  if (prod_plan_has_approved($month_start) && in_array($subject, ['date', 'volume'])) {
-    $warning = '<p>План производства уже утверждён!</p><p>Внесение изменений может привести к срыву установленных сроков выпуска продукции и к увеличению стоимости предоставляемых услуг.</p>';
-    $form['warning'] = [
-      '#markup' => '<div class="warning">' . $warning . '</div>',
-    ];
-  }
-
   if ($subject == 'docs') {
     $form['docs'] = [
       '#type' => 'plupload',
@@ -537,6 +533,14 @@ function prod_message_add_form($form, &$form_state, $nomenklatura_id = null, $mo
         'multiple_queues' => true, // возможность загружать в несколько приёмов
       ],
     ];
+  } else {
+    // предупреждение о рисках
+    if (prod_plan_has_approved($month_start) && in_array($subject, ['date', 'volume'])) {
+      $warning = '<p>План производства уже утверждён!</p><p>Внесение изменений может привести к срыву установленных сроков выпуска продукции и к увеличению стоимости предоставляемых услуг.</p>';
+      $form['warning'] = [
+        '#markup' => '<div class="warning">' . $warning . '</div>',
+      ];
+    }
   }
 
   $form['actions'] = ['#type' => 'actions'];
@@ -642,7 +646,8 @@ function prod_message_add_form_submit($form, &$form_state)
         }
       }
     }
-  }
+  } $changes[] = PROD_CHANGE_DOCS;
+
   // Дату и Объём хранить для каждого Сообщения
   $params['volume'] = ['from' => $date_vol_last['volume'], 'to' => $volume];
   $params['date'] = ['from' => $date_vol_last['date'], 'to' => $date];
@@ -671,15 +676,17 @@ function prod_message_add_form_submit($form, &$form_state)
     'created' => REQUEST_TIME,
     'month_ts' => $month_start,
     'nom_id' => $nom_id,
-    'author' => PROD_MESSAGE_AUTHOR_CLIENT,
+    'author' => user_has_role(MANAGER_RID) ? PROD_MESSAGE_AUTHOR_PROD : PROD_MESSAGE_AUTHOR_CLIENT,
     'comment' => check_plain($comment),
     'changes' => $changes ?? null,
     'params' => $params,
     'files' => $files,
   ]);
 
-  // экспортировать Сообщение
-  prod_message_export($message->id);
+  if (!user_has_role(MANAGER_RID)) {
+    // экспортировать Сообщение
+    prod_message_export($message->id);
+  }
 
   // если это первый запрос по Номенклатуре, установить настройку уведомления по email для пользователя
   $user_settings = variable_get('user_settings_' . $GLOBALS['user']->uid);

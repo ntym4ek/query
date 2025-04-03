@@ -209,7 +209,7 @@ function ext_user_get_companies_by_user($user = null)
     $user = user_load($user);
   }
 
-  $companies = false;
+  $companies = [];
   $tids = [];
   $user_wr = entity_metadata_wrapper('user', $user);
   // для клиентов и менеджеров, у кого задан список компаний

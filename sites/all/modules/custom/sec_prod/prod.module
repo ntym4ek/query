@@ -25,6 +25,7 @@ const  PROD_CHANGE_CANCEL = 4741;
 const  PROD_CHANGE_VOLUME = 4740;
 const  PROD_CHANGE_DATE = 4739;
 const  PROD_CHANGE_SCHEDULE = 4742;
+const  PROD_CHANGE_DOCS = 4847;
 
 // варианты Предупреждений
 const PROD_WARNING_YELLOW = 1;
@@ -58,7 +59,7 @@ function prod_menu()
     'page callback' => 'drupal_get_form',
     'page arguments' => ['prod_message_add_form', 3, 4],
     'access callback' => 'ext_user_has_roles',
-    'access arguments' => [[ADMIN_RID, CLIENT_RID]],
+    'access arguments' => [[ADMIN_RID, CLIENT_RID, MANAGER_RID]],
     'file' => 'includes/prod.pages.inc',
     'type' => MENU_NORMAL_ITEM,
   ];
@@ -234,8 +235,8 @@ function prod_message_get_info($mid)
   // обработка Изменения
   $changes = [];
   foreach ($message_wr->field_m_changes->getIterator() as $change_wr) {
-    $chid = $change_wr->getIdentifier();
-    $change = $change_wr->name->value();
+    $chid = $change_wr->value() ? $change_wr->getIdentifier() : '';
+    $change = $change_wr->value() ? $change_wr->name->value() : '';
     $volume_from_formatted = $params['volume']['from'] ? helper_number_format($params['volume']['from'], 2, ' ') : '';
     $volume_to_formatted = helper_number_format($params['volume']['to'], 2, ' ') . ' л(кг)';
     $date_from_formatted = date('n', $params['date']['from']) == date('n', $params['date']['to']) ? date('j', $params['date']['from']) : date('j', $params['date']['from']) . ' ' . helper_month_label_ru(date('n', $params['date']['from']) , true);
@@ -784,10 +785,10 @@ function prod_nomenklatura_get_info($nom_id)
       $nom_wr = entity_metadata_wrapper('taxonomy_term', $nom_id);
       if ($nom_wr->value()) {
         $name = $nom_wr->label();
-        $client_id = $nom_wr->field_client->value() ? $nom_wr->field_client->getIdentifier() : 0;
+        $company_id = $nom_wr->field_client->value() ? $nom_wr->field_client->getIdentifier() : 0;
         $id_1c = $nom_wr->field_1c_id->value();
         $artikul = $nom_wr->field_oc_artikul->value();
-        $label = $name . ($artikul && $client_id == COMPANY_TD ? ' (' . $artikul . ')' : '');
+        $label = $name . ($artikul && $company_id == COMPANY_TD ? ' (' . $artikul . ')' : '');
         $name_d = $nom_wr->field_oc_name_davalec->value();
         $artikul_d = $nom_wr->field_oc_artikul_davalec->value();
         if ($name_d) {
@@ -802,8 +803,8 @@ function prod_nomenklatura_get_info($nom_id)
           'artikul' => $artikul,
           'name_d' => $name_d,
           'artikul_d' => $artikul_d,
-          'client_id' => $client_id, // уст.
-          'company_id' => $client_id,
+          'client_id' => $company_id, // уст.
+          'company_id' => $company_id,
         ];
       }
     }
