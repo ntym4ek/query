@@ -495,7 +495,7 @@ function prod_message_add_form($form, &$form_state, $nomenklatura_id = null, $mo
   ];
   // если дата была изменена после смены месяца/года, то '#default_value' не сработает
   // и нужно менять $form_state
-  if ($form_state['triggering_element']['#name'] && in_array($form_state['triggering_element']['#name'], ['month', 'year'])) {
+  if (isset($form_state['triggering_element']['#name']) && in_array($form_state['triggering_element']['#name'], ['month', 'year'])) {
     $form_state["input"]["date"]["date"] = date('d.m.Y', $date_start);
     $form_state["values"]["date"] = date('Y-m-d', $date_start);
   }

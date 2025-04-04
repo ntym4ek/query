@@ -26,6 +26,7 @@ const  PROD_CHANGE_VOLUME = 4740;
 const  PROD_CHANGE_DATE = 4739;
 const  PROD_CHANGE_SCHEDULE = 4742;
 const  PROD_CHANGE_DOCS = 4847;
+const  PROD_CHANGE_P_UNIT = 4852;
 
 // варианты Предупреждений
 const PROD_WARNING_YELLOW = 1;
@@ -145,7 +146,6 @@ function prod_message_create($params)
     if (!empty($params['comment'])) $message_wr->field_comment = $params['comment'];
     if (!empty($params['changes'])) $message_wr->field_m_changes = $params['changes'];
     if (!empty($params['reason'])) $message_wr->field_m_reason = $params['reason'];
-    if (!empty($params['plan_rec'])) $message_wr->field_m_plan_record = $params['plan_rec'];
     if (!empty($params['warning'])) $message_wr->field_m_warning = $params['warning'];
     if (!empty($params['params'])) $message_wr->field_m_params = drupal_json_encode($params['params']);
     if (!empty($params['files'])) {
@@ -163,7 +163,7 @@ function prod_message_create($params)
 }
 
 /**
- * Вернуть массив сообщений для Номнклатуры и Месяца
+ * Вернуть массив сообщений для Номенклатуры и Месяца
  * с обратной сортировкой id.
  * По дате создания 1с не подойдёт, так как в 1с может быть следующее:
  *   id_1c: 26819, создано в 1с: 31.03.2025 11:57:37
@@ -182,7 +182,7 @@ function prod_message_get_all($month_ts, $nom_id)
     $entities = entity_load('message', array_keys($efResult['message']));
   }
 
-  return empty($entities) ? [] : $entities;
+  return $entities ?? [];
 }
 
 /**
@@ -309,11 +309,6 @@ function prod_message_get_info($mid)
     ];
   }
 
-  // так как План должен выгружаться после каждого изменения,
-  // а импорт плана удаляет все предыдущие Записи плана,
-  // то ссылка на Запись плана в Сообщении быстро становится неактуальной
-  // $plan_rec_info = $message_wr->field_m_plan_record->value() ? prod_plan_record_get_info($message_wr->field_m_plan_record->getIdentifier()) : null;
-
   return [
     'id' => $mid,
     'id_1c' => $message_wr->field_1c_id->value(),
@@ -329,7 +324,6 @@ function prod_message_get_info($mid)
     'reason' => $reason,
     'comment' => $message_wr->field_comment->value(),
     'created' => $message_wr->created->value(),
-    // 'plan_rec_id' => $plan_rec_info['id'] ?? null,
     'params' => $params,
     'warning' => $message_wr->field_m_warning->value() == PROD_WARNING_RED,
     'files' => $files,
@@ -1304,7 +1298,6 @@ function prod_query_migrate($qid)
         'id_1c' => $query_wr->field_oc_id->value(),
         'changes' => $changes,
         'reason' => $reason,
-//        'plan_rec' => isset($plan_rec) ? $plan_rec->id : null,
         'author' => $author,
         'params' => $params,
       ]);

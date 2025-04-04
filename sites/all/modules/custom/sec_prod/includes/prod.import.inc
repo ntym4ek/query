@@ -298,7 +298,7 @@ function prod_plan_import($array)
     foreach ($plan as $plan_item) {
       prod_plan_record_delete($month_start, $plan_item['nom_id']);
 
-      $plan_rec = prod_plan_record_create([
+      prod_plan_record_create([
         'import_time_ts' => REQUEST_TIME,
         'month_ts' => $month_start,
         'nom_id' => $plan_item['nom_id'],
@@ -313,7 +313,6 @@ function prod_plan_import($array)
           'month_ts' => $month_start,
           'nom_id' => $plan_item['nom_id'],
           'changes' => [PROD_CHANGE_APPROVE],
-          'plan_rec' => isset($plan_rec) ? $plan_rec->id : null,
           'author' => PROD_MESSAGE_AUTHOR_SYS_PROD,
           'params' => ['volume' => ['from' => $plan_item['volume'], 'to' => $plan_item['volume']], 'date' => ['from' => $plan_item['date'], 'to' => $plan_item['date']]],
         ]);
@@ -400,7 +399,8 @@ function prod_message_import($array)
   // общий Объём и Дата начала выпуска
   $volume = empty($array['volume']) ? 0 : $array['volume'];
   $date = empty($array['date']) ? 0 : helper_datetime_to_timestamp($array['date']);
-  $schedule = empty($array['schedule']) ? 0 : $array['schedule']; // было ли изменение графика выпуска
+  $schedule_changed = empty($array['schedule']) ? 0 : $array['schedule']; // было ли изменение графика выпуска
+  $p_unit_changed = empty($array['p_unit']) ? 0 : $array['p_unit']; // было ли изменение установки
 
   try {
     // Из-за возможного дублирования Сообщений из 1С нужно перед созданием искать их по 1c_id
@@ -441,9 +441,12 @@ function prod_message_import($array)
             if ($date_vol_last['date'] != $date) {
                               $changes[] = PROD_CHANGE_DATE;                   // изменение даты начала
             }
-            elseif ($schedule) {
+            elseif ($schedule_changed) {
                               $changes[] = PROD_CHANGE_SCHEDULE;               // изменение графика выпуска
             }
+          }
+          if ($p_unit_changed) {
+                              $changes[] = PROD_CHANGE_P_UNIT;                 // изменение установки
           }
         }
       }
@@ -482,7 +485,6 @@ function prod_message_import($array)
       'parent_id' => !empty($parent_id) ? $parent_id : null,
       'changes' => !empty($changes) ? $changes : [],
       'reason' => !empty($reason) ? $reason->tid : null,
-//      'plan_rec' => !empty($plan_rec) ? $plan_rec->id : null,
       'author' => PROD_MESSAGE_AUTHOR_PROD,
       'params' => $params,
       'warning' => !empty($warning) ? $warning : null,
