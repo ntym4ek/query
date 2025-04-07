@@ -1,5 +1,24 @@
 <?php
 
+
+/**
+ * hook_module_implements_alter
+ * изменить очерёдность выполнения hooks
+ */
+function mailer_module_implements_alter(&$implementations, $hook)
+{
+  // Name of the hook.
+  if (in_array($hook, ['custom_theme'])) {
+    // этот - последним
+    $module = 'mailer';
+    if (isset($implementations[$module])) {
+      $group = $implementations[$module];
+      unset($implementations[$module]);
+      $implementations[$module] = $group;
+    }
+  }
+}
+
 /**
  * Implements hook_cron_queue_info().
  */
@@ -16,6 +35,23 @@ function mailer_cron_queue_info()
   return $queues;
 }
 
+/**
+ * implements hook_custom_theme
+ *
+ * @return string
+ */
+function mailer_custom_theme()
+{
+  // На выполнение крона меняем тему на Project,
+  // где оформляется обёртка для письма и содержимое для рассылки уведомлений об изменениях.
+  // Для корректной работы нужно в hook_module_implements_alter поставить выполнение mailer_custom_theme последним
+  if ((isset($_POST["op"]) && $_POST["op"] == 'Run cron') || $_GET['q'] == "admin/reports/status/run-cron" ||
+    strpos($_SERVER['SCRIPT_FILENAME'], 'cron.php') ||
+    (isset($_GET['cron_key']) && variable_get('cron_key', 'drupal') === $_GET['cron_key']))
+  {
+    return 'project';
+  }
+}
 
 /**
  * Implements hook_mail_alter
@@ -229,28 +265,31 @@ function mailer_prod_mail_daily()
     $messages_by_companies_by_nom = [];
     foreach ($efResult['message'] as $message) {
       $message_info = prod_message_get_info($message->id);
-      $month_start = $message_info['month'];
-      $nom_info = prod_nomenklatura_get_info($message_info['nom']['id']);
-      $nom_id = $nom_info['id'];
-      $company_id = $nom_info['company_id'];
+      // оповещаем обо всех изменениях, кроме утверждения плана
+      if (!isset($message_info['changes']['list'][PROD_CHANGE_APPROVE])) {
+        $month_start = $message_info['month'];
+        $nom_info = prod_nomenklatura_get_info($message_info['nom']['id']);
+        $nom_id = $nom_info['id'];
+        $company_id = $nom_info['company_id'];
 
-      if (empty($messages_by_companies_by_nom[$company_id])) {
-        $messages_by_companies_by_nom[$company_id] = [
-          'id' => $company_id,
-          'nom' => [],
-        ];
-      }
-      if (empty($messages_by_companies_by_nom[$nom_info['company_id']]['nom'][$nom_id])) {
-        $messages_by_companies_by_nom[$nom_info['company_id']]['nom'][$nom_id] = [
-          'id' => $nom_id,
-          'months' => [],
-        ];
-      }
-      if (empty($messages_by_companies_by_nom[$nom_info['company_id']]['nom'][$nom_id]['months'][$month_start])) {
-        $messages_by_companies_by_nom[$nom_info['company_id']]['nom'][$nom_id]['months'][$month_start] = [];
-      }
+        if (empty($messages_by_companies_by_nom[$company_id])) {
+          $messages_by_companies_by_nom[$company_id] = [
+            'id' => $company_id,
+            'nom' => [],
+          ];
+        }
+        if (empty($messages_by_companies_by_nom[$nom_info['company_id']]['nom'][$nom_id])) {
+          $messages_by_companies_by_nom[$nom_info['company_id']]['nom'][$nom_id] = [
+            'id' => $nom_id,
+            'months' => [],
+          ];
+        }
+        if (empty($messages_by_companies_by_nom[$nom_info['company_id']]['nom'][$nom_id]['months'][$month_start])) {
+          $messages_by_companies_by_nom[$nom_info['company_id']]['nom'][$nom_id]['months'][$month_start] = [];
+        }
 
-      $messages_by_companies_by_nom[$nom_info['company_id']]['nom'][$nom_id]['months'][$month_start][$message->id] = $message_info;
+        $messages_by_companies_by_nom[$nom_info['company_id']]['nom'][$nom_id]['months'][$month_start][$message->id] = $message_info;
+      }
     }
 
     // поставить в очередь на отправку
@@ -294,28 +333,28 @@ function mailer_get_daily_mail_text($params)
 {
   $text = '';
 
-  foreach ($params['data']['nom'] as $nom_id => &$months) {
+  foreach ($params['data']['nom'] as $nom_id => &$nom) {
     // получить настройку пользователя по уведомлениям для Номенклатуры (по умолчанию отправляем)
     $user_settings = variable_get('user_settings_' . $params['uid']);
     if (!isset($user_settings['mail'][$nom_id]) || $user_settings['mail'][$nom_id]) {
       $nom_info = prod_nomenklatura_get_info($nom_id);
-      $text .= '<h2>' . $nom_info['label'] . '</h2>';
+      $text .= '<h2 style="margin:0;">' . $nom_info['label'] . '</h2>';
 
-      ksort($months);
-      foreach ($months as $month_start => $messages) {
+      ksort($nom['months']);
+      foreach ($nom['months'] as $month_start => $messages) {
         $month_formatted = helper_month_label_ru(date('n', $month_start)) . ' ' . date('Y', $month_start);
         krsort($messages);
         $message = array_shift($messages);
         $message_info = prod_message_get_info($message['id']);
         $product_url = url('/production/nomenklatura/' . $message_info['nom']['id'] . '/' . $message_info['month'], ['absolute' => true]);
 
-        $text .= '<h4>Последнее изменение за ' . $month_formatted . '</h4>';
+        $text .= '<h4 style="color: #999999;font-weight: 400;margin:0 0 1rem;">Последнее изменение за ' . $month_formatted . '</h4>';
         $text .= theme('message_mail', ['message_info' => $message_info]);
-        $text .= '<p style="color: #999999;font-size: 12px;">Перейти на <a href="' . $product_url . '" target="_blank">страницу продукта</a></p>';
+        $text .= '<p style="color: #999999;font-size: 12px;margin: 0 0 1rem;">Перейти на <a href="' . $product_url . '" target="_blank">страницу продукта</a></p>';
       }
     }
   }
 
-  return $text;
+  return '<div class="margin-top: 2rem;">' . $text . '</div>';
 }
 

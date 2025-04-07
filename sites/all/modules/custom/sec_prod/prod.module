@@ -230,6 +230,8 @@ function prod_message_delete_all($month_ts = null)
  */
 function prod_message_get_info($mid)
 {
+  if (empty($mid)) return [];
+
   $message_wr = entity_metadata_wrapper('message', $mid);
 
   $author = $message_wr->field_m_author->value();
@@ -1315,4 +1317,3 @@ function prod_query_migrate($qid)
     watchdog('migration', 'Неудачно. %error (%id)', ['%id' => $query_wr->getIdentifier(), '%error' => $error], WATCHDOG_ERROR);
   }
 }
-

@@ -177,7 +177,7 @@ function ext_user_user_load_by_login($login)
  * @param $company_id
  * @param $role -
  */
-function ext_user_get_users_by_company_id($company_id, $role = ROLE_USER_PRODUCTION)
+function ext_user_get_users_by_company_id($company_id, $role)
 {
   $users = [];
   if (is_numeric($company_id)) {

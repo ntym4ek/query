@@ -98,7 +98,7 @@ function project_message_mail($vars)
 
   $changes_formatted = str_replace('class="nowrap"', 'style="white-space: nowrap;"', $vars['message_info']['changes']['formatted']);
 
-  $output  =   '<div class="message" style="font-size: 14px;color: #333333;flex: 0 1 auto;background: #eee;border-radius: 5px;max-width: 500px; min-width: 150px;padding: 1.5rem 2rem 0.7rem; margin-bottom: 1rem;">';
+  $output  =   '<div class="message" style="font-size: 14px;color: #333333;flex: 0 1 auto;background: #eee;border-radius: 5px;max-width: 500px; min-width: 150px;padding: 1.5rem 2rem 0.7rem; margin-bottom: 0.5rem;">';
   if ($changes_formatted)
     $output .=     '<div class="m-change" style="font-size: 18px;font-weight: 600;">' . $changes_formatted . '</div>';
   if ($vars['message_info']['reason'])

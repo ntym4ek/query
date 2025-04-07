@@ -87,14 +87,14 @@ function production_import_processors_alter(&$processors)
 {
   if (variable_get('import_pr_1с_enable', 0)) {
     $path = drupal_get_path('module', 'production') . '/includes/';
-    $processors['first_queue'][] =  ['mask' => '/^dav.*\.json/',                 'include' => $path . 'production.import.inc', 'func' => 'production_client_import', 'archive' => 'prod/prod'];
-    $processors['first_queue'][] =  ['mask' => '/^ust.*\.json/',                 'include' => $path . 'production.import.inc', 'func' => 'production_produce_units_import', 'archive' => 'prod/prod'];
-    $processors['first_queue'][] =  ['mask' => '/^cause.*\.json/',               'include' => $path . 'production.import.inc', 'func' => 'production_reasons_import', 'archive' => 'prod/prod'];
-    $processors['first_queue'][] =  ['mask' => '/^nom.*\.json/',                 'include' => $path . 'production.import.inc', 'func' => 'production_nomenklatura_import', 'archive' => 'prod/prod'];
-    $processors['first_queue'][] =  ['mask' => '/^query_import_pred_.*\.json/',  'include' => $path . 'production.import.inc', 'func' => 'production_query_import', 'archive' => 'prod/prod'];
+    $processors['first_queue'][] =  ['mask' => '/^dav.*\.json/',                 'include' => $path . 'production.import.inc', 'func' => 'production_client_import', 'archive' => 'prod/legacy'];
+    $processors['first_queue'][] =  ['mask' => '/^ust.*\.json/',                 'include' => $path . 'production.import.inc', 'func' => 'production_produce_units_import', 'archive' => 'prod/legacy'];
+    $processors['first_queue'][] =  ['mask' => '/^cause.*\.json/',               'include' => $path . 'production.import.inc', 'func' => 'production_reasons_import', 'archive' => 'prod/legacy'];
+    $processors['first_queue'][] =  ['mask' => '/^nom.*\.json/',                 'include' => $path . 'production.import.inc', 'func' => 'production_nomenklatura_import', 'archive' => 'prod/legacy'];
+    $processors['first_queue'][] =  ['mask' => '/^query_import_pred_.*\.json/',  'include' => $path . 'production.import.inc', 'func' => 'production_query_import', 'archive' => 'prod/legacy'];
 
-    $processors['last_queue'][]  =  ['mask' => '/^plan.*\.json/',                'include' => $path . 'production.import.inc', 'func' => 'production_produce_plan_import', 'archive' => 'prod/prod'];
-    $processors['last_queue'][]  =  ['mask' => '/^query_import_oper_.*\.json/',  'include' => $path . 'production.import.inc', 'func' => 'production_query_import', 'archive' => 'prod/prod'];
+    $processors['last_queue'][]  =  ['mask' => '/^plan.*\.json/',                'include' => $path . 'production.import.inc', 'func' => 'production_produce_plan_import', 'archive' => 'prod/legacy'];
+    $processors['last_queue'][]  =  ['mask' => '/^query_import_oper_.*\.json/',  'include' => $path . 'production.import.inc', 'func' => 'production_query_import', 'archive' => 'prod/legacy'];
   }
 }
 
