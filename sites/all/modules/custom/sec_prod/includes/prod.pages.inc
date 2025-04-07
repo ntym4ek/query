@@ -468,7 +468,7 @@ function prod_message_add_form($form, &$form_state, $nomenklatura_id = null, $mo
   }
 
   // если добавление Номенклатуры или возобновление, после отмены
-  $date_vol_last = prod_message_get_last_date_volume($month_start, $nomenklatura_id);
+  $date_vol_last = prod_message_get_last_date_volume($month_start, $nomenklatura_id, DATE_VOL_FROM_PLAN);
 
   $volume_default = 0;
   if ($subject == 'add' || $date_vol_last['volume'] == 0) {
@@ -646,7 +646,7 @@ function prod_message_add_form_submit($form, &$form_state)
         }
       }
     }
-  } $changes[] = PROD_CHANGE_DOCS;
+  } else $changes[] = PROD_CHANGE_DOCS;
 
   // Дату и Объём хранить для каждого Сообщения
   $params['volume'] = ['from' => $date_vol_last['volume'], 'to' => $volume];

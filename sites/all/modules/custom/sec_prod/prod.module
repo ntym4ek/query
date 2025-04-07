@@ -31,6 +31,11 @@ const  PROD_CHANGE_P_UNIT = 4852;
 // варианты Предупреждений
 const PROD_WARNING_YELLOW = 1;
 const PROD_WARNING_RED = 2;
+
+// откуда брать последние данные о дате и объёме
+const DATE_VOL_FROM_MESSAGE = 1;
+const DATE_VOL_FROM_PLAN = 2;
+
 /**
  * Implementation of hook_menu().
  */
@@ -339,19 +344,19 @@ function prod_message_get_info($mid)
  * @param $nom_id
  * @return array
  */
-function prod_message_get_last_date_volume($month_start, $nom_id)
+function prod_message_get_last_date_volume($month_start, $nom_id, $from = DATE_VOL_FROM_MESSAGE)
 {
   $date_last = null;
   $volume_last = 0;
-//  if ($plan_rec_last = prod_plan_record_get_last($month_start, $nom_id)) {
-//    $plan_rec_last_info = prod_plan_record_get_info($plan_rec_last->id);
-//    $date_last = $plan_rec_last_info['date'];
-//    $volume_last = $plan_rec_last_info['volume'];
-//  }
+  if ($from == DATE_VOL_FROM_PLAN && $plan_rec_last = prod_plan_record_get_last($month_start, $nom_id)) {
+    $plan_rec_last_info = prod_plan_record_get_info($plan_rec_last->id);
+    $date_last = $plan_rec_last_info['date'];
+    $volume_last = $plan_rec_last_info['volume'];
+  }
 
   // берём из Сообщений, так Сообщения импортируются последовательно,
   // а каждый последующий файл Плана затирает предыдущий и история может стать некорректной
-  if ($message_last = prod_message_get_last($month_start, $nom_id)) {
+  if (($from == DATE_VOL_FROM_MESSAGE || empty($plan_rec_last)) && $message_last = prod_message_get_last($month_start, $nom_id)) {
     $message_last_info = prod_message_get_info($message_last->id);
     $date_last = $message_last_info['params']['date']['to'];
     $volume_last = $message_last_info['params']['volume']['to'];

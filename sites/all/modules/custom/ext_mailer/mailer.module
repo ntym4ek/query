@@ -82,9 +82,9 @@ function mailer_mail($key, &$message, $params)
       $settings_url = url('/user/' . $GLOBALS['user']->uid . '/edit', ['absolute' => true]);
 
       $body = '<p style="margin-bottom:3rem;">На сайт "Управление заказами" поступило следующее сообщение от производства:</p>' .
-              '<h2>' . $nom_info['label'] . '</h2>' .
+              '<h2 style="margin:2rem 0 0;">' . $nom_info['label'] . '</h2>' .
               theme('message_mail', ['message_info' => $message_info]) .
-              '<p style="color: #999999;font-size: 12px;">Перейти на <a href="' . $product_url . '" target="_blank">страницу продукта</a></p>'.
+              '<p style="color:#999999;font-size:12px;margin:0 0 1rem;">Перейти на <a href="' . $product_url . '" target="_blank">страницу продукта</a></p>'.
               '<div style="color: #999999;font-size: 12px;margin-top: 4rem;">Вы получили это письмо, потому что у вас настроено получение уведомлений сразу после публикации сообщений от производства на сайт. ' .
                             'Настроить получение сводного отчёта раз в сутки можно в <a href="' . $settings_url . '">Личном кабинете</a>.</div>';
 
@@ -94,8 +94,18 @@ function mailer_mail($key, &$message, $params)
       break;
 
     case 'client_send_daily_mail':
+      $body =mailer_get_daily_mail_text($params);
+
+      $body = '<div>' .
+                '<p>На сайте "Управление заказами" в плане производства за предыдущие сутки зарегистрированы следующие изменения:</p>' .
+                $body .
+                '<div style="color: #999999;font-size: 12px;margin-top: 4rem;">' .
+                  'Отключить получение уведомлений по какому-либо из наименований можно на странице соответствующего продукта.'.
+                '</div>' .
+              '</div>';
+
       $message['subject'] = 'Изменения за сутки на сайте "Управление заказами"';
-      $message['body'][] = mailer_get_daily_mail_text($params);
+      $message['body'][] = $body;
 
       break;
 
@@ -338,7 +348,7 @@ function mailer_get_daily_mail_text($params)
     $user_settings = variable_get('user_settings_' . $params['uid']);
     if (!isset($user_settings['mail'][$nom_id]) || $user_settings['mail'][$nom_id]) {
       $nom_info = prod_nomenklatura_get_info($nom_id);
-      $text .= '<h2 style="margin:0;">' . $nom_info['label'] . '</h2>';
+      $text .= '<h2 style="margin:2rem 0 0;">' . $nom_info['label'] . '</h2>';
 
       ksort($nom['months']);
       foreach ($nom['months'] as $month_start => $messages) {
@@ -348,13 +358,13 @@ function mailer_get_daily_mail_text($params)
         $message_info = prod_message_get_info($message['id']);
         $product_url = url('/production/nomenklatura/' . $message_info['nom']['id'] . '/' . $message_info['month'], ['absolute' => true]);
 
-        $text .= '<h4 style="color: #999999;font-weight: 400;margin:0 0 1rem;">Последнее изменение за ' . $month_formatted . '</h4>';
+        $text .= '<h4 style="color:#333333;font-weight:400;margin:0.5rem 0 0.1rem;">Последнее изменение за ' . $month_formatted . '</h4>';
         $text .= theme('message_mail', ['message_info' => $message_info]);
-        $text .= '<p style="color: #999999;font-size: 12px;margin: 0 0 1rem;">Перейти на <a href="' . $product_url . '" target="_blank">страницу продукта</a></p>';
+        $text .= '<p style="color:#999999;font-size:12px;margin:0 0 1rem;">Перейти на <a href="' . $product_url . '" target="_blank">страницу продукта</a></p>';
       }
     }
   }
 
-  return '<div class="margin-top: 2rem;">' . $text . '</div>';
+  return $text;
 }
 

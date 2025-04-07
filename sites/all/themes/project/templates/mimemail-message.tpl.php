@@ -34,7 +34,7 @@
                   <img src="<?php print $logo_mail; ?>" style="display: block; max-width: 100%; max-height: 100%;">
                 </td>
                 <td style="padding: 10px 0; height: 70px; vertical-align: middle; font-size:20px; font-weight: 700; ">
-                  <div style="max-width:250px; text-align: center;"><?php print $site_name; ?></div>
+                  <div style="max-width:250px;"><?php print $site_name; ?></div>
                 </td>
               </tr>
 
