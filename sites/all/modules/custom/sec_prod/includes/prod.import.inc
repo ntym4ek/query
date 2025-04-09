@@ -495,22 +495,22 @@ function prod_message_import($array)
   }
 
 
-  // уведомить клиентов о новой заявке
+  // уведомить клиента о новом Сообщении
   $nom_info = prod_nomenklatura_get_info($nom_id);
   if ($message && $users = ext_user_get_users_by_company_id($nom_info['company_id'], CLIENT_RID)) {
     foreach ($users as $user) {
-      // получить настройку пользователя для Номенклатуры/Месяца
-      $user_settings = variable_get('user_settings_' . $GLOBALS['user']->uid);
-      $mail_by_nom = !isset($user_settings['mail'][$nom_id]) || $user_settings['mail'][$nom_id];
-      // получить настройку: отправлять сразу или раз в сутки
-      $mail_immediatelly = empty($user->field_notify_once_a_day["und"][0]["value"]);
-
-      if ($mail_by_nom && $mail_immediatelly) {
-        drupal_mail('mailer', 'client_send_imported_message_mail', $user->mail, user_preferred_language($user), ['message_id' => $message->id]);
+      // получить настройки почтовой рассылки пользователя
+      $user_settings = variable_get('user_settings_' . $user->uid);
+      // включена ли рассылка (по умолчанию Вкл)
+      if (!isset($user_settings['mail']['base']) || $user_settings['mail']['base']) {
+        // значение рассылки для конкретной Номенклатуры (по умолчанию Вкл)
+        if (!isset($user_settings['mail']['nom'][$nom_id]) || $user_settings['mail']['nom'][$nom_id]) {
+          // отправлять сразу? (по умолчанию раз в сутки)
+          if (isset($user_settings['mail']['frequency']) && $user_settings['mail']['frequency'] == 1) {
+            drupal_mail('mailer', 'client_send_imported_message_mail', $user->mail, user_preferred_language($user), ['message_id' => $message->id, 'uid' => $user->uid]);
+          }
+        }
       }
-
-      // todo тестирование отправки письма
-//      drupal_mail('mailer', 'client_send_imported_message_mail', 'mega_comp@mail.ru', 'ru', ['message_id' => $message->id]);
     }
   }
 

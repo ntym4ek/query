@@ -79,32 +79,32 @@ function mailer_mail($key, &$message, $params)
       $message_info = prod_message_get_info($params['message_id']);
       $nom_info = prod_nomenklatura_get_info($message_info['nom']['id']);
       $product_url = url('/production/nomenklatura/' . $message_info['nom']['id'] . '/' . $message_info['month'], ['absolute' => true]);
-      $settings_url = url('/user/' . $GLOBALS['user']->uid . '/edit', ['absolute' => true]);
+      $settings_url = url('/user/' . $params['uid'], ['absolute' => true]);
 
-      $body = '<p style="margin-bottom:3rem;">На сайт "Управление заказами" поступило следующее сообщение от производства:</p>' .
+      $body = '<p style="margin-bottom:3rem;">На сайт поступило следующее сообщение от производства:</p>' .
               '<h2 style="margin:2rem 0 0;">' . $nom_info['label'] . '</h2>' .
               theme('message_mail', ['message_info' => $message_info]) .
               '<p style="color:#999999;font-size:12px;margin:0 0 1rem;">Перейти на <a href="' . $product_url . '" target="_blank">страницу продукта</a></p>'.
-              '<div style="color: #999999;font-size: 12px;margin-top: 4rem;">Вы получили это письмо, потому что у вас настроено получение уведомлений сразу после публикации сообщений от производства на сайт. ' .
-                            'Настроить получение сводного отчёта раз в сутки можно в <a href="' . $settings_url . '">Личном кабинете</a>.</div>';
+              '<div style="margin: 3rem 0;">' .
+                'Настроить рассылку уведомлений можно в <a href="' . $settings_url . '">Личном кабинете</a>.'.
+              '</div>';
 
-      $message['subject'] = 'Новое сообщение на сайте "Управление заказами"';
+      $message['subject'] = 'Новое сообщение на сайте "KCCC GROUP. Производство"';
       $message['body'][] = $body;
 
       break;
 
     case 'client_send_daily_mail':
-      $body =mailer_get_daily_mail_text($params);
-
+      $settings_url = url('/user/' . $params['uid'], ['absolute' => true]);
       $body = '<div>' .
-                '<p>На сайте "Управление заказами" в плане производства за предыдущие сутки зарегистрированы следующие изменения:</p>' .
-                $body .
-                '<div style="color: #999999;font-size: 12px;margin-top: 4rem;">' .
-                  'Отключить получение уведомлений по какому-либо из наименований можно на странице соответствующего продукта.'.
+                '<p>В плане производства за предыдущие сутки зарегистрированы следующие изменения:</p>' .
+                $params['text'] .
+                '<div style="margin: 3rem 0;">' .
+                  'Настроить рассылку уведомлений можно в <a href="' . $settings_url . '">Личном кабинете</a>.'.
                 '</div>' .
               '</div>';
 
-      $message['subject'] = 'Изменения за сутки на сайте "Управление заказами"';
+      $message['subject'] = 'Изменения за сутки на сайте "KCCC GROUP. Производство"';
       $message['body'][] = $body;
 
       break;
@@ -154,8 +154,8 @@ function mailer_mail($key, &$message, $params)
       $message['subject'] = 'Импортирован план на ' . $params['month'];
       $message['body'][] =
         '<h2>Здравствуйте!</h2>' .
-        '<p>На сайте компании ООО "Кирово-Чепецкий завод Агрохимикат" <a href="http://prod.kccc.ru">"Управление заказами"</a> внесён план производства на ' . $params['month'] . ' ' . $params["year"] . '. </p>' .
-        '<p>Ознакомиться с планом можно в <a href="http://prod.kccc.ru">Личном кабинете</a></p>';
+        '<p>На сайте компании ООО "Кирово-Чепецкий завод Агрохимикат" <a href="https://prod.kccc.ru">"Управление заказами"</a> внесён план производства на ' . $params['month'] . ' ' . $params["year"] . '. </p>' .
+        '<p>Ознакомиться с планом можно в <a href="https://prod.kccc.ru">Личном кабинете</a></p>';
 
       break;
   }
@@ -173,7 +173,7 @@ function mailer_batch_mail_production()
     ->propertyCondition('uid', 0)
     ->propertyCondition('created', time(), '<')
     ->propertyCondition('created', time() - 60*60*24, '>=')
-    ->propertyOrderBy('id', 'ASC');
+    ->propertyOrderBy('id');
   $result = $efquery->execute();
   if (!empty($result['query'])) {
 
@@ -302,14 +302,23 @@ function mailer_prod_mail_daily()
       }
     }
 
+
     // поставить в очередь на отправку
     $mail_queue = DrupalQueue::get('daily_mails_queue');
     foreach ($messages_by_companies_by_nom as $company_id => $company) {
       if ($users = ext_user_get_users_by_company_id($company_id, CLIENT_RID)) {
         foreach ($users as $user) {
-          // клиент должен иметь настройку: получать письма раз в сутки
-          if ($mail_daily = !empty($user->field_notify_once_a_day["und"][0]["value"])) {
-            $mail_queue->createItem(['uid' => $user->uid, 'email' => $user->mail ,'data' => $company]);
+          // получить настройки почтовой рассылки пользователя
+          $user_settings = variable_get('user_settings_' . $user->uid);
+          // включена ли рассылка (по умолчанию Вкл)
+          if (!isset($user_settings['mail']['base']) || $user_settings['mail']['base']) {
+            // отправлять раз в сутки? (по умолчанию)
+            if (!isset($user_settings['mail']['frequency']) || $user_settings['mail']['frequency'] == 2) {
+              // если сообщения только по отключенной номенклатуре, то текст будет пустым
+              if ($text = mailer_get_daily_mail_text($company['nom'], $user->uid)) {
+                $mail_queue->createItem(['uid' => $user->uid, 'email' => $user->mail, 'text' => $text]);
+              }
+            }
           }
         }
       }
@@ -336,19 +345,22 @@ function mailer_send_daily_mails_legacy($params)
 
 /**
  * Вернуть текст письма с изменениями за день
- * @param $params
+ * для конкретного пользователя (у каждого могут отличаться настройки по номенклатуре)
+ * @param $noms
+ * @param $uid
+ *
  * @return string
  */
-function mailer_get_daily_mail_text($params)
+function mailer_get_daily_mail_text($noms, $uid)
 {
   $text = '';
 
-  foreach ($params['data']['nom'] as $nom_id => &$nom) {
-    // получить настройку пользователя по уведомлениям для Номенклатуры (по умолчанию отправляем)
-    $user_settings = variable_get('user_settings_' . $params['uid']);
-    if (!isset($user_settings['mail'][$nom_id]) || $user_settings['mail'][$nom_id]) {
+  foreach ($noms as $nom_id => &$nom) {
+    // получить настройки почтовой рассылки пользователя
+    $user_settings = variable_get('user_settings_' . $uid);
+    // значение рассылки для конкретной Номенклатуры (по умолчанию Вкл)
+    if (!isset($user_settings['mail']['nom'][$nom_id]) || $user_settings['mail']['nom'][$nom_id]) {
       $nom_info = prod_nomenklatura_get_info($nom_id);
-      $text .= '<h2 style="margin:2rem 0 0;">' . $nom_info['label'] . '</h2>';
 
       ksort($nom['months']);
       foreach ($nom['months'] as $month_start => $messages) {
@@ -358,9 +370,31 @@ function mailer_get_daily_mail_text($params)
         $message_info = prod_message_get_info($message['id']);
         $product_url = url('/production/nomenklatura/' . $message_info['nom']['id'] . '/' . $message_info['month'], ['absolute' => true]);
 
-        $text .= '<h4 style="color:#333333;font-weight:400;margin:0.5rem 0 0.1rem;">Последнее изменение за ' . $month_formatted . '</h4>';
-        $text .= theme('message_mail', ['message_info' => $message_info]);
-        $text .= '<p style="color:#999999;font-size:12px;margin:0 0 1rem;">Перейти на <a href="' . $product_url . '" target="_blank">страницу продукта</a></p>';
+        // проверить настройки уведомлений для Тем сообщений
+        $send = false;
+        foreach ($message_info['changes']['list'] as $chid => $change) {
+          // для утверждения плана по умолчанию - выкл
+          if ($chid == PROD_CHANGE_APPROVE) {
+            if (!empty($user_settings['mail']['themes'][$chid])) {
+              $send = true;
+              break;
+            }
+          }
+          // остальные по умолчанию все вкл
+          else {
+            if (!isset($user_settings['mail']['themes'][$chid]) || $user_settings['mail']['themes'][$chid]) {
+              $send = true;
+              break;
+            }
+          }
+        }
+
+        if ($send) {
+          $text .= '<h2 style="margin:2rem 0 0;">' . $nom_info['label'] . '</h2>';
+          $text .= '<h4 style="color:#333333;font-weight:400;margin:0.5rem 0 0.1rem;">Последнее изменение за ' . $month_formatted . '</h4>';
+          $text .= theme('message_mail', ['message_info' => $message_info]);
+          $text .= '<p style="color:#999999;font-size:12px;margin:0 0 1rem;">Перейти на <a href="' . $product_url . '" target="_blank">страницу продукта</a></p>';
+        }
       }
     }
   }

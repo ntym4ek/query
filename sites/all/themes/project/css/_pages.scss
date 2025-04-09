@@ -175,6 +175,63 @@
 }
 
 
+// - Профиль пользователя ----------------------------------------------------------------------------------------------
+.profile {
+  .profile-name {
+    font-size: $font-size-h2;
+    margin-bottom: .5rem;
+    text-transform: uppercase;
+  }
+  .profile-role {
+    font-size: $font-size-base; font-weight: 400;
+  }
+  .profile-settings {
+    .form-item-mails,
+    .form-item-frequency,
+    .form-item-themes,
+    .form-type-item {
+      @include row();
+      margin-bottom: 1rem;
+      > label {
+        @include col('xs', 12);
+        @include col('md', 3);
+        margin: .4rem 0 0;
+      }
+      > .description {
+        @include col('xs', 12);
+        @include col('md', 9);
+        @include col-offset('md', 3);
+      }
+      //.form-checkboxes > .form-item:first-child { margin-top: 0; }
+    }
+
+    .form-item-mails,
+    .form-item-themes,
+    .form-type-item {
+      > [class^=form] {
+        @include col('xs', 12);
+        @include col('md', 9);
+      }
+    }
+    .form-item-frequency > [class^=form] {
+      @include col('xs', 3);
+    }
+
+    .form-type-item .form-disabled {
+      color: $text-muted;
+    }
+
+  }
+
+  @media #{$tablet} {
+    .profile-settings {
+      .form-item-frequency > [class^=form] {
+        margin-left: 1rem;
+      }
+    }
+  }
+}
+
 // - Устаревшие разделы ------------------------------------------------------------------------------------------------
 .view {
   .view-filters {

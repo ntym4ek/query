@@ -176,6 +176,8 @@ function ext_user_user_load_by_login($login)
  * Вернуть Клиентов по заданной Компании и Роли
  * @param $company_id
  * @param $role -
+ *
+ * @return array of stdClass
  */
 function ext_user_get_users_by_company_id($company_id, $role)
 {
@@ -283,23 +285,186 @@ function ext_user_get_session_setting($name)
 /**
  * Определить наличие роли у текущего пользователя
  * @param $rids - массив ID ролей
+ * @param $account -
  * @return bool
  */
-function ext_user_has_roles($rids)
+function ext_user_has_roles($rids, $account = null)
 {
-  $account = $GLOBALS['user'];
+  $account = $account ?? $GLOBALS['user'];
   $account_rids = array_keys($account->roles);
 
   return (bool)array_intersect($rids, $account_rids);
 }
 
+/**
+ * Implements hook_preprocess_HOOK().
+ */
+function ext_user_preprocess_user_profile(&$vars)
+{
+  // подготовить переменные для user-profile.tpl.php
+  if ($GLOBALS['theme'] != 'seven') {
+    $account = $vars['elements']['#account'];
+    $vars['user_info'] = ext_user_get_user_info($account->uid);
+    if (user_has_role(CLIENT_RID, $account)) {
+      $vars['client_settings_form'] = drupal_get_form('ext_user_client_settings_form', $account);
+    }
+  }
+}
 
-function ext_user_process_page(&$vars)
+function ext_user_client_settings_form($form, $form_state, $account = null)
+{
+  $account = $account ?? $GLOBALS['user']->uid;
+  $user_settings = variable_get('user_settings_' . $account->uid);
+
+  if (isset($form_state['triggering_element'])) {
+    $value = $form_state["triggering_element"]["#value"];
+    if (strpos($form_state['triggering_element']['#name'], 'mails') === 0) {
+      $user_settings['mail']['base'] = $value;
+    }
+    if ($form_state['triggering_element']['#name'] == 'frequency') {
+      $user_settings['mail']['frequency'] = $value;
+    }
+    if (strpos($form_state['triggering_element']['#name'], 'themes') === 0) {
+      $tid = $form_state["triggering_element"]["#return_value"];
+      $user_settings['mail']['themes'][$tid] = (int)(bool)$value;
+    }
+
+    variable_set('user_settings_' . $account->uid, $user_settings);
+  }
+
+
+  $form['#prefix'] = '<div id="client-settings-form-wrapper">';
+  $form['#suffix'] = '</div>';
+  $form['mails'] = [
+    '#title' => 'Рассылка',
+    '#description' => 'уведомления об изменениях плана производства',
+    '#type' => 'checkboxes',
+    '#name' => 'mails',
+    '#options' => [
+      1 => 'включить',
+    ],
+    '#default_value' => [1 => $user_settings['mail']['base'] ?? 1],
+    '#ajax' => [
+      'wrapper' => 'client-settings-form-wrapper',
+      'callback' => 'ext_user_client_settings_form_ajax',
+    ],
+  ];
+
+  $form['frequency'] = [
+    '#title' => 'Частота уведомлений',
+    '#type' => 'select',
+    '#name' => 'frequency',
+    '#options' => [
+      1 => 'сразу после изменения плана',
+      2 => 'сводка раз в сутки',
+    ],
+    '#default_value' => $user_settings['mail']['frequency'] ?? 2,
+    '#disabled' => isset($user_settings['mail']['base']) && !$user_settings['mail']['base'],
+    '#ajax' => [
+      'wrapper' => 'client-settings-form-wrapper',
+      'callback' => 'ext_user_client_settings_form_ajax',
+    ],
+  ];
+
+  // определить список опций
+  $options = [];
+  $defaults = [];
+  if ($terms = taxonomy_get_tree(taxonomy_vocabulary_machine_name_load('plan_changes')->vid)) {
+    foreach ($terms as $term) {
+      $options[$term->tid] = $term->name;
+      // по умолчанию все включены, кроме PROD_CHANGE_APPROVE
+      if ($term->tid == PROD_CHANGE_APPROVE) {
+        if (!empty($user_settings['mail']['themes'][$term->tid])) $defaults[] = $term->tid;
+      } else {
+        if (!isset($user_settings['mail']['themes'][$term->tid]) || $user_settings['mail']['themes'][$term->tid]) $defaults[] = $term->tid;
+      }
+    }
+  }
+  $form['themes'] = [
+    '#title' => 'Темы уведомлений',
+    '#description' => 'Выберите темы сообщений от производства, уведомления о которых вы хотите получать на почту',
+    '#type' => 'checkboxes',
+    '#name' => 'themes',
+    '#options' => $options,
+    '#default_value' => $defaults,
+    '#disabled' => isset($user_settings['mail']['base']) && !$user_settings['mail']['base'],
+    '#ajax' => [
+      'wrapper' => 'client-settings-form-wrapper',
+      'callback' => 'ext_user_client_settings_form_ajax',
+    ],
+  ];
+
+  $form['nom'] = [
+    '#type' => 'item',
+    '#title' => 'По номенклатуре',
+    '#markup' =>  '<div class="form-markup' . (isset($user_settings['mail']['base']) && !$user_settings['mail']['base'] ? ' form-disabled' : '') . '">' .
+                    'Отключить рассылку для конкретной номенклатуры можно на странице заявки на её производство.<br>Для этого в блоке "Настройки" снимите соответствующую галочку.' .
+                  '</div>',
+  ];
+
+  return $form;
+}
+
+function ext_user_client_settings_form_ajax($form, $form_state)
+{
+  return $form;
+}
+
+function ext_user_preprocess_page(&$vars)
 {
   if (arg(0) == 'user') {
+    $vars['banner_title'] = arg(1) == $GLOBALS['user']->uid ? 'Личный кабинет' : 'Кабинет клиента';
     $vars['title'] = '';
     if (isset($vars["tabs"])) {
       unset($vars["tabs"]);
     }
   }
+}
+
+/**
+ * Вернуть массив с информацией о Пользователе
+ */
+function ext_user_get_user_info($user = null)
+{
+  if (empty($user)) $user = $GLOBALS['user']->uid;
+  $key = $user->uid ?? $user;
+  $result = &drupal_static(__FUNCTION__ . serialize($key));
+
+  if (empty($result)) {
+    $account = is_numeric($user) ? user_load($user) : $user;
+    $name = '';
+
+    $label = t('User');
+    if (ext_user_has_roles([CLIENT_RID, USER_PRODUCTION_RID], $account)) $label = 'Клиент';
+    if (ext_user_has_roles([MANAGER_RID, MANAGER_PRODUCTION_RID], $account)) $label = 'Менеджер производства';
+
+    $companies = ['list' => [], 'formatted' => ''];
+    if (!empty($account->uid)) {
+      $user_wr = entity_metadata_wrapper('user', $account->uid);
+      $name = $user_wr->label();
+
+      // компания
+      $f = [];
+      foreach ($user_wr->field_user_companies->getIterator() as $company_wr) {
+        $companies['list'][$company_wr->getIdentifier()] = [
+          'id' => $company_wr->getIdentifier(),
+          'label' => $company_wr->label(),
+        ];
+        $f[] = $company_wr->label();
+      }
+      if ($f) $companies['formatted'] = implode(', ', $f);
+    }
+
+    $result = [
+      'id' => $account->uid,
+      'status' => $account->status,
+      'label' => $label,
+      'email' => $account->mail,
+      'name' => $name,
+      'companies' => $companies,
+      'url' => url('user/' . $account->uid)
+    ];
+  }
+
+  return $result;
 }

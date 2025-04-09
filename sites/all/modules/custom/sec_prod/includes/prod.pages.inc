@@ -688,11 +688,6 @@ function prod_message_add_form_submit($form, &$form_state)
     prod_message_export($message->id);
   }
 
-  // если это первый запрос по Номенклатуре, установить настройку уведомления по email для пользователя
-  $user_settings = variable_get('user_settings_' . $GLOBALS['user']->uid);
-  if (!isset($user_settings['mail'][$nom_id])) $user_settings['mail'][$nom_id] = 1;
-  variable_set('user_settings_' . $GLOBALS['user']->uid, $user_settings);
-
   // редирект на страницу Номенклатуры из ajax формы
   $url_redirect = '/production/nomenklatura/' . $form_state['values']['nom'] . '/' . $month_start;
   ctools_include('ajax');
@@ -704,9 +699,10 @@ function prod_message_add_form_submit($form, &$form_state)
 
 function prod_nom_page_settings_form($form, $form_state, $month_start, $nom_id)
 {
+  $user_settings = variable_get('user_settings_' . $GLOBALS['user']->uid);
+
   if (!empty($form_state["triggering_element"]) && $form_state["triggering_element"]["#name"] == 'mail') {
-    $user_settings = variable_get('user_settings_' . $GLOBALS['user']->uid);
-    $user_settings['mail'][$form_state['values']['nom_id']] = $form_state['values']['mail'];
+    $user_settings['mail']['nom'][$form_state['values']['nom_id']] = $form_state['values']['mail'];
     variable_set('user_settings_' . $GLOBALS['user']->uid, $user_settings);
   }
 
@@ -717,15 +713,12 @@ function prod_nom_page_settings_form($form, $form_state, $month_start, $nom_id)
     'month_start' => ['#type' => 'hidden', '#value' => $month_start],
   ];
 
-  // найти настройки для номенклатуры, если не настроено пользователем, то уведомлять
-  $user_settings = variable_get('user_settings_' . $GLOBALS['user']->uid);
-  $default = !isset($user_settings['mail'][$nom_id]) || $user_settings['mail'][$nom_id];
 
   $form['mail'] = [
     '#type' => 'checkbox',
     '#name' => 'mail',
     '#title' => 'уведомлять по e-mail об изменениях по продукту',
-    '#default_value' => $default,
+    '#default_value' => !isset($user_settings['mail']['nom'][$nom_id]) || $user_settings['mail']['nom'][$nom_id], //по умолчанию уведомлять
     '#ajax' => [
       'callback' => 'prod_nom_page_settings_form_callback',
       'wrapper' => 'nom-page-settings-wrapper',
