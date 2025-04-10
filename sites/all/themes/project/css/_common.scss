@@ -30,7 +30,7 @@ body {
       margin-right: -1px; // закрыть прозрачную полосу на макбуке
     }
     &:after {
-      background: rgba(27, 30, 40, 0.4);
+      background: rgba(27, 30, 40, 0.58);
       content: "";
       display: block;
       flex: 1;
@@ -69,7 +69,7 @@ body {
 
   .menu-bkg {
     display:grid; justify-content: flex-end; align-items: center;
-    background: rgba(27, 30, 40, 0.4);
+    background: rgba(27, 30, 40, 0.58);
     height: 100%;
     position: relative;
     padding-right: 1rem;

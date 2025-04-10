@@ -206,7 +206,6 @@
         @include col('md', 9);
         @include col-offset('md', 3);
       }
-      //.form-checkboxes > .form-item:first-child { margin-top: 0; }
     }
 
     .form-item-mails,
@@ -217,7 +216,8 @@
         @include col('md', 9);
       }
     }
-    .form-item-frequency > [class^=form] {
+    .form-item-frequency > [class^=form],
+    .form-item-frequency > .ajax-wrapper {
       @include col('xs', 3);
     }
 
