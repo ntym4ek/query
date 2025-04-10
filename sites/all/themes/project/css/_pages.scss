@@ -171,6 +171,10 @@
     }
     td:not(:first-child) { white-space: nowrap; }
     .empty { padding: 1rem; }
+    .t-footer {
+      background: $gray-lightest;
+      font-weight: 500;
+    }
   }
 }
 

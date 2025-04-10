@@ -815,12 +815,14 @@ function prod_year_plan_form_callback($form, $form_state)
 function prod_year_table($company_id, $year)
 {
   // собрать последние Записи плана по Номенклатуре за 12 месяцев начиная с сентября
-  $nom_arr = $sort_arr = [];
+  $sort_arr = [];
+  $nom_arr = ['total' => ['year_volume' => 0]];
   for ($i = 1; $i <= 12; $i++) {
     $month_start = gmmktime(0, 0, 0, 9 + $i - 1, 1, $year);
     $month_num = date('n', $month_start);
     // получить список номенклатуры
     $nom_list = prod_nomenklatura_get_list_by_plan(['company_ids' => [$company_id], 'month_ts' => $month_start]);
+    $nom_arr['total']['months'][$month_num] = 0;
 
     foreach($nom_list as $nomid => $nom) {
       if ($plan_rec_last = prod_plan_record_get_last($month_start, $nomid)) {
@@ -829,13 +831,16 @@ function prod_year_table($company_id, $year)
           $nom_arr[$nomid] = [
             'label' => $nom_info['label'],
             'months' => [],
-            'year_amount' => 0,
+            'year_volume' => 0,
           ];
           $sort_arr[$nom_info['label']] = $nomid;
         }
         $plan_rec_info = prod_plan_record_get_info($plan_rec_last->id);
         $nom_arr[$nomid]['months'][$month_num] = ['month_start' => $month_start, 'volume' => $plan_rec_info['volume']];
-        $nom_arr[$nomid]['year_amount'] += $plan_rec_info['volume'];
+        $nom_arr[$nomid]['year_volume'] += $plan_rec_info['volume'];
+
+        $nom_arr['total']['months'][$month_num] += $plan_rec_info['volume'];
+        $nom_arr['total']['year_volume'] += $plan_rec_info['volume'];
       }
     }
   }
@@ -850,8 +855,8 @@ function prod_year_table($company_id, $year)
   ksort($sort_arr);
   $rows = [];
   foreach ($sort_arr as $n_tid) {
-    if ($nom_arr[$n_tid]['year_amount']) {
-      $row = [$nom_arr[$n_tid]['label'], ['data' => helper_number_format($nom_arr[$n_tid]['year_amount'], 1, ' '), 'align' => 'right']];
+    if ($nom_arr[$n_tid]['year_volume']) {
+      $row = [$nom_arr[$n_tid]['label'], ['data' => helper_number_format($nom_arr[$n_tid]['year_volume'], 1, ' '), 'align' => 'right']];
       foreach ([9,10,11,12,1,2,3,4,5,6,7,8] as $m_num) {
         if (!empty($nom_arr[$n_tid]['months'][$m_num]['volume'])) {
           $month_start = $nom_arr[$n_tid]['months'][$m_num]['month_start'];
@@ -863,6 +868,18 @@ function prod_year_table($company_id, $year)
       $rows[] = $row;
     }
   }
+
+  // total
+  $row = ['Суммарно по продуктам', ['data' => helper_number_format($nom_arr['total']['year_volume'], 1, ' '), 'align' => 'right']];
+  foreach ([9,10,11,12,1,2,3,4,5,6,7,8] as $m_num) {
+    if (!empty($nom_arr['total']['months'][$m_num])) {
+      $volume = $nom_arr['total']['months'][$m_num];
+      $output = helper_number_format($volume, 1, ' ');
+    } else $output = '';
+    $row[] = ['data' => $output, 'align' => 'right'];
+  }
+  $rows[] = ['data' => $row, 'class' => ['t-footer']];
+
 
   return  theme('table', ['header' => $header, 'rows' => $rows, 'attributes' => ['class' => ['table-year-plan']], 'empty' => 'Нет данных за выбранный сезон']);
 }
