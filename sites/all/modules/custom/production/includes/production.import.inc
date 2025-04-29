@@ -259,7 +259,7 @@ function production_produce_plan_import($array)
         $produce_unit = production_produce_unit_get_by_1c_id($item['unit_id_1c']);
         $date_arr = explode('.', $item['date']);
         $day_start = gmmktime(0, 0, 0, $date_arr[1], $date_arr[0], $date_arr[2]);
-        $client_id = $nom->field_client['und'][0]['tid'];
+        $client_id = $nom->field_client['und'][0]['tid'] ?? 0;
 
         if (!isset($plan[$nom->tid])) {
           $plan[$nom->tid] = [

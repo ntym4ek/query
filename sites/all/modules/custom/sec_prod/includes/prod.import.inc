@@ -263,7 +263,7 @@ function prod_plan_import($array)
         $nom          = prod_nomenklatura_get_by_1c_params($item['nom_id']);
         $produce_unit = prod_produce_unit_get_by_1c_id($item['unit_id_1c']);
         $day_start    = helper_datetime_to_timestamp($item['date']);
-        $client_id    = $nom->field_client['und'][0]['tid'];
+        $client_id    = $nom->field_client['und'][0]['tid'] ?? 0;
 
         if (!isset($plan[$nom->tid])) {
           $plan[$nom->tid] = [
