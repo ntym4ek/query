@@ -10,7 +10,11 @@ function prod_nom_list_form($form, &$form_state)
   $month          = empty($form_state["values"]["month"])   ? $month_default : $form_state["values"]['month'];
   $year           = empty($form_state["values"]['year'])    ? $year_default : $form_state["values"]['year'];
   $company        = empty($form_state["values"]['company']) ? null : $form_state["values"]['company'];
-  $nomenklatura   = empty($form_state["values"]['nom'])     ? null : $form_state["values"]['nom'];
+  $nomenklatura   = null;
+  if (!isset($form_state["triggering_element"]["#name"]) || $form_state["triggering_element"]["#name"] != 'company') {
+    $nomenklatura = empty($form_state["values"]['nom'])     ? null : $form_state["values"]['nom'];
+  }
+
 
   // если значение задано пользователем, сохранить в сессии
   if (!empty($form_state["values"]["month"])) ext_user_store_session_setting('page_nom_list_month', $form_state["values"]["month"]);
@@ -142,7 +146,7 @@ function prod_nom_list_form($form, &$form_state)
       'callback' => 'prod_nom_list_form_callback',
       'wrapper' => 'nom-list-form-wrapper',
     ],
-    '#prefix' => '<div class="filter">',
+    '#prefix' => '<div class="filter company">',
     '#suffix' => '</div>',
   ];
 
@@ -163,7 +167,7 @@ function prod_nom_list_form($form, &$form_state)
       'callback' => 'prod_nom_list_form_callback',
       'wrapper' => 'nom-list-form-wrapper',
     ],
-    '#prefix' => '<div class="filter">',
+    '#prefix' => '<div class="filter nomenklatura">',
     '#suffix' => '</div>',
   ];
 

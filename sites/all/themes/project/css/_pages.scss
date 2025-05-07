@@ -6,7 +6,11 @@
     display: flex;
     margin-bottom: 1rem;
   }
-  .filter { flex: 0 0 auto; }
+  .filter {
+    flex: 0 0 auto;
+    &.company { flex: 0 1 40%; }
+    &.nomenklatura { flex: 0 1 60%; }
+  }
   .form-item-nom { max-width: 450px; }
   .sort {
     flex: 1 0 auto;
