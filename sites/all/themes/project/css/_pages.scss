@@ -75,11 +75,13 @@
 
 .nom-page {
   margin-bottom: 4rem;
+  .n-row {
+    display: flex;
+  }
   .n-header {
     color: $brand-blue;
     background: $brand-bg-blue;
     border-radius: 5px;
-    display: flex;
     padding: 2rem; margin: 2rem 0;
     .field { margin-bottom: 0; }
     .n-title {
@@ -87,7 +89,7 @@
       padding-right: 2rem;
     }
     .n-month {
-      flex: 0 0 auto;
+      flex: 0 0 210px;
       text-align: center;
       margin-right: 1rem;
     }
@@ -102,15 +104,18 @@
       background-color: $brand-bg-red;
       color: $brand-red;
     }
-    .n-notes1 {
+    .n-general-warning {
+      flex: 0 0 100%;
       padding-top: 1rem;
     }
   }
 
-  .n-notes {
-    border-radius: 5px;
-    padding: 1rem;
+  .n-warnings {
     margin-bottom: 2rem;
+  }
+  .n-warning {
+    border-radius: 5px;
+    padding: 1rem; margin-bottom: 1rem;
     &.warn-yellow { background-color: $brand-bg-orange; }
     &.warn-red { background-color: $brand-bg-red; color: $brand-red; }
   }

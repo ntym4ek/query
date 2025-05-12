@@ -218,7 +218,7 @@ function prod_nom_list_form_callback($form, $form_values)
 
 function prod_nom_page($nom_id, $month_start)
 {
-  // todo проверить доступ пользователя к номенклатуре
+  // проверить доступ пользователя к номенклатуре
   $nom_info = prod_nomenklatura_get_info($nom_id);
   if (!in_array($nom_info['company_id'], array_keys(ext_user_get_companies_by_user()))) {
     return 'У вас нет доступа к данной записи. Если вы считаете, что это ошибка, свяжитесь с нами по e-mail <a href="mailto:support@kccc.ru">support@kccc.ru</a>';
@@ -261,16 +261,16 @@ function prod_nom_page($nom_id, $month_start)
   }
 
   // определить наличие Предупреждений
-  $class_warn = '';
-  $warning_text = '';
-  $warnings = prod_nomenklatura_get_warnings($month_start, $nom_id);
-  if ($warnings['last_warning']) {
-    if ($warnings['last_warning'] == PROD_WARNING_YELLOW) $class_warn = ' warn-yellow';
-    if ($warnings['last_warning'] == PROD_WARNING_RED)    $class_warn = ' warn-red';
+  $general_warning_class = $general_warning_text = '';
+  $warnings = [];
+  $warnings_by_nom = prod_nomenklatura_get_warnings($month_start, $nom_id);
+  if ($warnings_by_nom['last_warning']) {
+    if ($warnings_by_nom['last_warning'] == PROD_WARNING_YELLOW) $general_warning_class = 'warn-yellow';
+    if ($warnings_by_nom['last_warning'] == PROD_WARNING_RED)    $general_warning_class = 'warn-red';
 
     // текст предупреждения
-    $warning_message_info = prod_message_get_info(array_keys($warnings['list'])[0]);
-    $warning_text = $warning_message_info["comment"];
+    $warning_message_info = prod_message_get_info(array_keys($warnings_by_nom['list'])[0]);
+    $general_warning_text = 'ВНИМАНИЕ! ' . $warning_message_info["comment"];
   }
 
   // определить доступные Действия
@@ -283,6 +283,13 @@ function prod_nom_page($nom_id, $month_start)
   $next_month_start = gmmktime(0, 0, 0, date('n', $month_start)+1, date('j', $month_start), date('Y', $month_start));
   $queries_not_allowed = $today_start + PROD_DAYS_BEFORE_PRODUCE_START * 24*60*60 >= $next_month_start;
   $month_is_over = $today_start >= $next_month_start;
+  if ($queries_not_allowed) {
+    $text = $month_is_over ? 'месяц завершился' : 'до конца месяца осталось менее ' . format_plural(PROD_DAYS_BEFORE_PRODUCE_START, 'day', '@count days');
+    $warnings[] = [
+      'text' => 'Заявки на изменения не принимаются, так как ' . $text . '.',
+      'class' => 'warn-red',
+    ];
+  }
 
   $output_a = '';
   if (user_has_role(CLIENT_RID)) $output_a .= '<a class="btn' . $button_class . ' autodialog" data-dialog-width="650" href="' . $url . '?subject=date"' . ($date_vol_last['volume'] && !$queries_not_allowed && !$month_is_over ? '' : 'disabled') . '>Перенести дату выпуска</a>';
@@ -299,7 +306,8 @@ function prod_nom_page($nom_id, $month_start)
 
   // сформировать вывод
   $output .=  '<div class="nom-page">';
-  $output .=    '<div class="n-header' . $class_warn . '">';
+  $output .=    '<div class="n-header ' . $general_warning_class . '">';
+  $output .=      '<div class="n-row">';
   $output .=        '<div class="n-title"' . (variable_get('ext_admin_debug', 0) ? ' title="' . $nom_info["id_1c"] . '"' : '') . '>';
   $output .=          $field_title;
   $output .=        '</div>';
@@ -309,12 +317,24 @@ function prod_nom_page($nom_id, $month_start)
   $output .=        '<div class="n-volume">';
   $output .=          $field_volume;
   $output .=        '</div>';
+  $output .=      '</div>';
+  if ($general_warning_text) {
+    $output .=    '<div class="n-row">';
+    $output .=      '<div class="n-general-warning">';
+    $output .=        $general_warning_text;
+    $output .=      '</div>';
+    $output .=    '</div>';
+  }
   $output .=    '</div>';
 
-  if ($warning_text) {
-    $output .=      '<div class="n-notes' . $class_warn . '">';
-    $output .=        'Причина предупреждения: ' . drupal_strtolower($warning_text);
-    $output .=      '</div>';
+  if ($warnings) {
+    $output .= '<div class="n-warnings">';
+    foreach($warnings as $warning) {
+      $output .= '<div class="n-warning ' . $warning['class'] . '">';
+      $output .=   $warning['text'];
+      $output .= '</div>';
+    }
+    $output .= '</div>';
   }
 
   $output .=    '<div class="n-plan">';
