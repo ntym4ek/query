@@ -283,10 +283,10 @@ function prod_nom_page($nom_id, $month_start)
   $next_month_start = gmmktime(0, 0, 0, date('n', $month_start)+1, date('j', $month_start), date('Y', $month_start));
   $queries_not_allowed = $today_start + PROD_DAYS_BEFORE_PRODUCE_START * 24*60*60 >= $next_month_start;
   $month_is_over = $today_start >= $next_month_start;
-  if ($queries_not_allowed) {
-    $text = $month_is_over ? 'месяц завершился' : 'до конца месяца осталось менее ' . format_plural(PROD_DAYS_BEFORE_PRODUCE_START, 'day', '@count days');
+  if (user_has_role(CLIENT_RID) && $queries_not_allowed) {
+    $text = $month_is_over ? 'завершением месяца' : 'тем, что до конца месяца осталось менее ' . format_plural(PROD_DAYS_BEFORE_PRODUCE_START, 'day', '@count days');
     $warnings[] = [
-      'text' => 'Заявки на изменения не принимаются, так как ' . $text . '.',
+      'text' => 'Заявки на изменения не принимаются в связи с ' . $text . '.',
       'class' => 'warn-red',
     ];
   }
@@ -595,7 +595,7 @@ function prod_message_add_form_validate($form, &$form_state)
     // дата не может быть меньше минимального периода до начала производства
     $permitted_day_start = helper_get_day_start_from_timestamp() + PROD_DAYS_BEFORE_PRODUCE_START * 24 * 60 * 60;
     if (helper_get_day_start_from_timestamp(strtotime($form_state['values']['date'])) < $permitted_day_start) {
-      form_set_error('date', 'Дата начала выпуска не может быть ранее, чем ' . date('d.m.Y', $permitted_day_start)) . ' г.';
+      form_set_error('date', 'Дата начала выпуска не может быть ранее, чем ' . date('d.m.Y', $permitted_day_start) . ' г.');
       return false;
     }
     // дата для переноса даты не должна быть раньше текущего месяца

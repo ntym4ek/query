@@ -145,7 +145,7 @@ function project_nomenklatura_teaser($vars)
     if ($vars['warning'] == PROD_WARNING_RED) $class_warn = ' warn-red';
   }
 
-  $output .='<a href="">';
+//  $output .='<a href="">';
   $output .=  '<div class="nom-item' . $class_warn . '">';
   $output .=    '<div class="n-header">';
   $output .=      '<div class="n-title"><a href="' . $url . '">' . $title . '</a></div>';
@@ -158,7 +158,7 @@ function project_nomenklatura_teaser($vars)
   $output .=      '<div class="n-actions">' . $button . ' </div>';
   $output .=    '</div>';
   $output .=  '</div>';
-  $output .='</a>';
+//  $output .='</a>';
 
   return $output;
 }

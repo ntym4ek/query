@@ -24,7 +24,7 @@
       </div>
       <?php if ($user_info['companies']['formatted']): ?>
       <div class="row">
-        <div class="col-xs-12 col-md-3"><div class="label">Компании</div></div>
+        <div class="col-xs-12 col-md-3"><div class="label">Список компаний</div></div>
         <div class="col-xs-12 col-md-9"><div class="field"><?php print $user_info['companies']['formatted']; ?></div></div>
       </div>
       <?php endif; ?>
