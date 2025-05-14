@@ -245,6 +245,7 @@ function prod_plan_import($array)
     $err_message = '';
     if (prod_plan_has_approved($month_start)) {
       if      ($plan_type == PROD_PLAN_TYPE_PRED)  $err_message = 'Импорт Плана. Попытка импорта предварительного плана при наличии утверждённого на ' . $array['month'] . '.';
+      if      ($plan_type == PROD_PLAN_TYPE_APPR)  $err_message = 'Импорт Плана. Попытка импорта утверждённого плана на ' . $array['month'] . 'повторно.';
     } elseif  ($plan_type == PROD_PLAN_TYPE_OPER)  $err_message = 'Импорт Плана. Попытка импорта оперативного плана при отсутствии утверждённого на ' . $array['month'] . '.';
 
     if ($err_message) {
