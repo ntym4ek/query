@@ -196,13 +196,18 @@ function prod_message_get_all($month_ts, $nom_id)
  * Вернуть последнее Сообщение по Месяцу и Номенклатуре
  * @param $month_ts
  * @param $nom_id
+ * @param $owner - автор сообщения. Массив, так как сообщения с каждой стороны могут быть автоматическими,
+ *                  например [PROD_MESSAGE_AUTHOR_PROD, PROD_MESSAGE_AUTHOR_SYS_PROD].
  */
-function prod_message_get_last($month_ts, $nom_id)
+function prod_message_get_last($month_ts, $nom_id, $owner = null)
 {
   $efQuery = new EntityFieldQuery();
   $efQuery->entityCondition('entity_type', 'message');
   $efQuery->fieldCondition('field_m_month', 'value', $month_ts);
   $efQuery->fieldCondition('field_m_nomenklatura', 'target_id', $nom_id);
+  if (!empty($owner)) {
+    $efQuery->fieldCondition('field_m_author', 'value', $owner);
+  }
   $efQuery->propertyOrderBy('id', 'DESC');
   $efQuery->range(0, 1);
 
@@ -340,7 +345,7 @@ function prod_message_get_info($mid)
 }
 
 /**
- * Вернуть последние включённые в план значения Даты и Объёма выпуска
+ * Вернуть последние включённые в план значения Даты и Объёма выпуска.
  * Используется в истории Сообщений.
  * @param $month_start
  * @param $nom_id
@@ -358,7 +363,7 @@ function prod_message_get_last_date_volume($month_start, $nom_id, $from = DATE_V
 
   // берём из Сообщений, так Сообщения импортируются последовательно,
   // а каждый последующий файл Плана затирает предыдущий и история может стать некорректной
-  if (($from == DATE_VOL_FROM_MESSAGE || empty($plan_rec_last)) && $message_last = prod_message_get_last($month_start, $nom_id)) {
+  if (($from == DATE_VOL_FROM_MESSAGE || empty($plan_rec_last)) && $message_last = prod_message_get_last($month_start, $nom_id, PROD_MESSAGE_AUTHOR_PROD)) {
     $message_last_info = prod_message_get_info($message_last->id);
     $date_last = $message_last_info['params']['date']['to'];
     $volume_last = $message_last_info['params']['volume']['to'];

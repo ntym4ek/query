@@ -413,12 +413,12 @@ function prod_message_import($array)
     // определить, какие произошли Изменения
     $changes = [];
     // предыдущее Сообщение
-    $message_prev = prod_message_get_last($month_start, $nom_id);
+    $message_prod_prev = prod_message_get_last($month_start, $nom_id, PROD_MESSAGE_AUTHOR_PROD);
     // последние значения даты и объёма
     $date_vol_last = prod_message_get_last_date_volume($month_start, $nom_id);
 
       // если нет Записей плана, то это Включение в план или Отказ
-    if (empty($message_prev)) {
+    if (empty($message_prod_prev)) {
       if ($volume)            $changes[] = PROD_CHANGE_ADD_TO_PLAN;             // внесение в план
       // если по инициативе клиента
       elseif($reason->tid == 553) {
