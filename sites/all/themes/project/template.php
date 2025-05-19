@@ -28,6 +28,9 @@ function project_theme()
     'field_custom' => [
       'variables' => ['title' => null, 'content' => null],
     ],
+    'table_header_mod' => [
+      'variables' => [],
+    ],
   ];
 }
 
@@ -246,4 +249,158 @@ function project_preprocess_mimemail_message(&$vars)
   $vars['sign']   = empty($vars['message']['params']['context']['sign']) ? t('Postal robot') . ' ' . t($site_name) : $vars['message']['params']['context']['sign'];
   // notice - текст сообщения о том, что письмо сформировано автоматически
   $vars['notice'] = !isset($vars['message']['params']['context']['auto']) ? t('This message was generated automatically and does not require a response') : $vars['message'] ['params']['context']['auto'];
+}
+
+/**
+ * Модификация theme_table с многоуровневым заголовком
+ * todo проверить необходимость $colgroups, $sticky и $empty
+ */
+function project_table(array $variables)
+{
+  $header = $variables['header'];
+  $rows = $variables['rows'];
+  $attributes = $variables['attributes'];
+  $caption = $variables['caption'] ?? '';
+//  $colgroups = $variables['colgroups'];
+//  $sticky = $variables['sticky'];
+  $empty = $variables['empty'];
+  $header_multiple = $variables['header_multiple'];
+
+  // Add sticky headers, if applicable.
+  if (count($header)) {
+    drupal_add_js('misc/tableheader.js');
+    // Add 'sticky-enabled' class to the table to identify it for JS.
+    // This is needed to target tables constructed by this function.
+    $attributes['class'][] = 'sticky-enabled';
+  }
+
+  $output = '<table'. drupal_attributes($attributes) .">\n";
+
+  if (isset($caption)) {
+    $output .= '<caption>'. $caption ."</caption>\n";
+  }
+
+  // Multiple header rows
+  if(!$header_multiple == NULL){
+    $thead_set = '';
+    // Format the table header:
+    if (count($header)) {
+      foreach($header as $number => $head){
+        $ts = tablesort_init($head);
+        // HTML requires that the thead tag has tr tags in it followed by tbody
+        // tags. Using if clause to check and see if we have any rows and whether
+        // the thead tag is already open
+        if(count($rows) && $thead_set != 1){
+          $output .= ' <thead><tr>';
+          $thead_set = 1;
+        }else{
+          $output .= ' <tr>';
+        }
+        //$output .= (count($rows) ? ' <thead><tr>' : ' <tr>');
+        foreach ($head as $cell) {
+          $cell = tablesort_header($cell, $head, $ts);
+          $output .= _theme_table_cell($cell, TRUE);
+        }
+      }
+      // Using ternary operator to close the tags based on whether or not there are rows
+      $output .= (count($rows) ? " </tr></thead>\n" : "</tr>\n");
+    }
+    else {
+      $ts = array();
+    }
+    // One header row
+  }else{
+    // Format the table header:
+    if (count($header)) {
+      $ts = tablesort_init($header);
+      // HTML requires that the thead tag has tr tags in it followed by tbody
+      // tags. Using ternary operator to check and see if we have any rows.
+      $output .= (count($rows) ? ' <thead><tr>' : ' <tr>');
+      foreach ($header as $cell) {
+        $cell = tablesort_header($cell, $header, $ts);
+        $output .= _theme_table_cell($cell, TRUE);
+      }
+      // Using ternary operator to close the tags based on whether or not there are rows
+      $output .= (count($rows) ? " </tr></thead>\n" : "</tr>\n");
+    }
+    else {
+      $ts = array();
+    }
+  }
+
+
+  // Add the 'empty' row message if available.
+  if (empty($rows) && $empty) {
+    $header_count = 0;
+    if (!empty($header)) {
+      $header = $header_multiple ? array_shift($header) : $header;
+      foreach ($header as $header_cell) {
+        if (is_array($header_cell)) {
+          $header_count += isset($header_cell['colspan']) ?
+            $header_cell['colspan'] : 1;
+        }
+        else {
+          $header_count++;
+        }
+      }
+    }
+    $rows[] = array(
+      array(
+        'data' => $empty,
+        'colspan' => $header_count,
+        'class' => array(
+          'empty',
+          'message'
+        ),
+      ),
+    );
+  }
+
+  // Format the table rows:
+  if (count($rows)) {
+    $output .= "<tbody>\n";
+    $flip = array('even' => 'odd', 'odd' => 'even');
+    $class = 'even';
+    foreach ($rows as $number => $row) {
+      $attributes = array();
+
+      // Check if we're dealing with a simple or complex row
+      if (isset($row['data'])) {
+        foreach ($row as $key => $value) {
+          if ($key == 'data') {
+            $cells = $value;
+          }
+          else {
+            $attributes[$key] = $value;
+          }
+        }
+      }
+      else {
+        $cells = $row;
+      }
+      if (count($cells)) {
+        // Add odd/even class
+        $class = $flip[$class];
+        if (isset($attributes['class'])) {
+          $attributes['class'] .= ' '. $class;
+        }
+        else {
+          $attributes['class'] = $class;
+        }
+
+        // Build row
+        $output .= ' <tr'. drupal_attributes($attributes) .'>';
+        $i = 0;
+        foreach ($cells as $cell) {
+          $cell = tablesort_cell($cell, $header, $ts, $i++);
+          $output .= _theme_table_cell($cell);
+        }
+        $output .= " </tr>\n";
+      }
+    }
+    $output .= "</tbody>\n";
+  }
+
+  $output .= "</table>\n";
+  return $output;
 }

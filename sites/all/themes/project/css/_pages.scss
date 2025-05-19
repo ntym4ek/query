@@ -228,6 +228,86 @@
   }
 }
 
+.year-plan-fact-page {
+  margin-bottom: 4rem;
+  .table-wrapper {
+    overflow-x: auto;
+    position: relative;
+  }
+  table {
+    font-size: .6rem;
+    border-collapse: separate; border-spacing: 0; border-top: 1px solid $gray-light; border-right: 1px solid $gray-light;
+    width: 100%;
+    tr { background: none; }
+    th,
+    td {
+      border: 1px solid $gray-light; border-top-width: 0; border-right-width: 0;
+      padding: .2rem;
+      min-width: 50px; min-height: 21px; height: 21px;
+    }
+    th {
+      white-space: nowrap;
+      &:not(:first-child) { text-align: center; }
+    }
+    td:not(:first-child) { white-space: nowrap; }
+    .fixed-col-1 {
+      left: 0;
+      min-width: 100px; max-width: 100px; width: 100px;
+    }
+    .fixed-col-2 { left: 100px; }
+    .fixed {
+      position:sticky; z-index: 5;
+      background-color: #fff;
+    }
+    .fixed-shadow {
+      &:after {
+        box-shadow: inset 10px 0 8px -8px rgba(0, 0, 0, 0.2);
+        position: absolute; top: 0; bottom: 0; right: 0;
+        transform: translateX(100%);
+        width: 10px;
+        transition: box-shadow .3s;
+        content: "";
+        pointer-events: none;
+      }
+    }
+    .week-start { border-left-width: 2px; }
+    .empty { padding: 1rem; }
+    .t-footer {
+      background: $gray-lightest;
+      font-weight: 500;
+    }
+  }
+  .sticky-header {
+    box-shadow: 0 10px 8px -8px rgba(0, 0, 0, 0.2);
+    z-index: 10;
+    td, th { background-color: #fff; }
+  }
+
+
+  @media #{$pad} {
+    table {
+      font-size: .7rem;
+      .fixed-col-1 {
+        min-width: 120px; max-width: 120px; width: 120px;
+      }
+      .fixed-col-2 { left: 120px; }
+      th,
+      td {
+        min-width: 65px;
+      }
+    }
+  }
+  @media #{$tablet} {
+    table {
+      font-size: .7rem;
+      .fixed-col-1 {
+        min-width: 250px; max-width: 250px; width: 250px;
+      }
+      .fixed-col-2 { left: 250px; }
+    }
+  }
+}
+
 
 // - Профиль пользователя ----------------------------------------------------------------------------------------------
 .profile {

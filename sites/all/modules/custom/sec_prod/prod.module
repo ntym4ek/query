@@ -71,7 +71,7 @@ function prod_menu()
     'file' => 'includes/prod.pages.inc',
     'type' => MENU_NORMAL_ITEM,
   ];
-  $items['production/year-plan'] = array(
+  $items['production/year-plan'] = [
     'title' => 'План на сезон',
     'page callback' => 'drupal_get_form',
     'page arguments' => ['prod_year_plan_form'],
@@ -80,7 +80,17 @@ function prod_menu()
     'file' => 'includes/prod.pages.inc',
     'type' => MENU_NORMAL_ITEM,
     'menu_name' => 'main-menu',
-  );
+  ];
+  $items['production/year-plan-fact'] = [
+    'title' => 'План-факт',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => ['prod_year_plan_fact_form'],
+    'access callback' => 'ext_user_has_roles',
+    'access arguments' => [[ADMIN_RID, MANAGER_RID]],
+    'file' => 'includes/prod.pages.inc',
+    'type' => MENU_NORMAL_ITEM,
+    'menu_name' => 'main-menu',
+  ];
 
   return $items;
 }
