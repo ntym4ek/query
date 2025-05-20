@@ -264,7 +264,7 @@ function project_table(array $variables)
 //  $colgroups = $variables['colgroups'];
 //  $sticky = $variables['sticky'];
   $empty = $variables['empty'];
-  $header_multiple = $variables['header_multiple'];
+  $header_multiple = $variables['header_multiple'] ?? '';
 
   // Add sticky headers, if applicable.
   if (count($header)) {
@@ -281,11 +281,11 @@ function project_table(array $variables)
   }
 
   // Multiple header rows
-  if(!$header_multiple == NULL){
+  if (!$header_multiple == NULL) {
     $thead_set = '';
     // Format the table header:
     if (count($header)) {
-      foreach($header as $number => $head){
+      foreach($header as $number => $head) {
         $ts = tablesort_init($head);
         // HTML requires that the thead tag has tr tags in it followed by tbody
         // tags. Using if clause to check and see if we have any rows and whether
@@ -309,7 +309,7 @@ function project_table(array $variables)
       $ts = array();
     }
     // One header row
-  }else{
+  } else {
     // Format the table header:
     if (count($header)) {
       $ts = tablesort_init($header);
@@ -378,18 +378,14 @@ function project_table(array $variables)
       else {
         $cells = $row;
       }
-      if (count($cells)) {
-        // Add odd/even class
-        $class = $flip[$class];
-        if (isset($attributes['class'])) {
-          $attributes['class'] .= ' '. $class;
-        }
-        else {
-          $attributes['class'] = $class;
-        }
 
-        // Build row
-        $output .= ' <tr'. drupal_attributes($attributes) .'>';
+      if (!empty($cells)) {
+        // Add odd/even class.
+        $class = $flip[$class];
+        $attributes['class'][] = $class;
+
+        // Build row.
+        $output .= ' <tr' . drupal_attributes($attributes) . '>';
         $i = 0;
         foreach ($cells as $cell) {
           $cell = tablesort_cell($cell, $header, $ts, $i++);

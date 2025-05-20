@@ -63,7 +63,7 @@ function prod_menu()
     'type' => MENU_NORMAL_ITEM,
   ];
   $items['production/message/add'] = [
-    'title' => 'Новое сообщение',
+    'title' => 'Запрос на изменение',
     'page callback' => 'drupal_get_form',
     'page arguments' => ['prod_message_add_form', 3, 4],
     'access callback' => 'ext_user_has_roles',

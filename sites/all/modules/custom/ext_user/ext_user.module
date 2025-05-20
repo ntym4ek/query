@@ -38,14 +38,6 @@ function ext_user_module_implements_alter(&$implementations, $hook)
   }
 }
 
-function ext_user_preprocess_menu_link(&$vars)
-{
-  if ($vars["element"]["#href"] == 'user' && user_is_logged_in()) {
-    // сменить Аккаунт на Имя пользователя
-    $vars["element"]["#title"] = $GLOBALS['user']->name;
-  }
-}
-
 /**
  * Implements hook_form_FORM_ID_alter().
  */
