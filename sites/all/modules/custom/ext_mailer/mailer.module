@@ -1,0 +1,423 @@
+<?php
+
+
+/**
+ * hook_module_implements_alter
+ * изменить очерёдность выполнения hooks
+ */
+function mailer_module_implements_alter(&$implementations, $hook)
+{
+  // Name of the hook.
+  if (in_array($hook, ['custom_theme'])) {
+    // этот - последним
+    $module = 'mailer';
+    if (isset($implementations[$module])) {
+      $group = $implementations[$module];
+      unset($implementations[$module]);
+      $implementations[$module] = $group;
+    }
+  }
+}
+
+/**
+ * Implements hook_cron_queue_info().
+ */
+function mailer_cron_queue_info()
+{
+  $queues['daily_mails_queue'] = array(
+    'worker callback' => 'mailer_send_daily_mails',
+  );
+
+  $queues['daily_mails_queue_legacy'] = array(
+    'worker callback' => 'mailer_send_daily_mails_legacy',
+  );
+
+  return $queues;
+}
+
+/**
+ * implements hook_custom_theme
+ *
+ * @return string
+ */
+function mailer_custom_theme()
+{
+  // На выполнение крона меняем тему на Project,
+  // где оформляется обёртка для письма и содержимое для рассылки уведомлений об изменениях.
+  // Для корректной работы нужно в hook_module_implements_alter поставить выполнение mailer_custom_theme последним
+  if ((isset($_POST["op"]) && $_POST["op"] == 'Run cron') || $_GET['q'] == "admin/reports/status/run-cron" ||
+    strpos($_SERVER['SCRIPT_FILENAME'], 'cron.php') ||
+    (isset($_GET['cron_key']) && variable_get('cron_key', 'drupal') === $_GET['cron_key']))
+  {
+    return 'project';
+  }
+}
+
+/**
+ * Implements hook_mail_alter
+ */
+function mailer_mail_alter(&$message)
+{
+  if (strpos($_SERVER['HTTP_HOST'], '.local') !== FALSE || !variable_get('client_email_enable', 1)) {
+    $message['send'] = false;
+    watchdog('mailer', 'Эмуляция отправки E-Mail.<br />Почта: %mail<br />Тема: %subject<br />Текст: %body', ['%mail' => $message['to'], '%subject' => $message['subject'], '%body' => var_export($message['body'], true)], WATCHDOG_DEBUG);
+  } else {
+    watchdog('mailer', 'Отправка E-Mail.<br />Почта: %mail <br />Тема: %subject<br />Текст: %body', ['%mail' => $message['to'], '%subject' => $message['subject'], '%body' => var_export($message['body'], true)], WATCHDOG_DEBUG);
+  }
+}
+
+/**
+ * Implements hook_mail
+ */
+function mailer_mail($key, &$message, $params)
+{
+  $front_url = url('<front>', ['absolute' => true]);
+
+  switch($key) {
+
+    case 'client_imported_message_mail':
+      $message_info = prod_message_get_info($params['message_id']);
+      $nom_info = prod_nomenklatura_get_info($message_info['nom']['id']);
+      $product_url = url('/production/nomenklatura/' . $message_info['nom']['id'] . '/' . $message_info['month'], ['absolute' => true]);
+      $settings_url = url('/user/' . $params['uid'], ['absolute' => true]);
+
+      $body = '<p style="margin-bottom:3rem;">На сайт поступило следующее сообщение от производства:</p>' .
+              '<h2 style="margin:2rem 0 0;">' . $nom_info['label'] . '</h2>' .
+              theme('message_mail', ['message_info' => $message_info]) .
+              '<p style="color:#999999;font-size:12px;margin:0 0 1rem;">Перейти на <a href="' . $product_url . '" target="_blank">страницу продукта</a></p>'.
+              '<div style="margin: 3rem 0;">' .
+                'Настроить рассылку уведомлений можно в <a href="' . $settings_url . '">Кабинете</a>.'.
+              '</div>';
+
+      $message['subject'] = 'Новое сообщение на сайте "KCCC GROUP. Производство"';
+      $message['body'][] = $body;
+
+      break;
+
+    case 'client_daily_mail':
+      $settings_url = url('/user/' . $params['uid'], ['absolute' => true]);
+      $body = '<div>' .
+                '<p>В плане производства за предыдущие сутки зарегистрированы следующие изменения:</p>' .
+                $params['text'] .
+                '<div style="margin: 3rem 0;">' .
+                  'Настроить рассылку уведомлений можно в <a href="' . $settings_url . '">Кабинете</a>.'.
+                '</div>' .
+              '</div>';
+
+      $message['subject'] = 'Изменения за сутки на сайте "KCCC GROUP. Производство"';
+      $message['body'][] = $body;
+
+      break;
+
+    case 'manager_corrections_request_mail':
+        $message_info = prod_message_get_info($params['message_id']);
+        $nom_info = prod_nomenklatura_get_info($message_info['nom']['id']);
+        $product_url = url('/production/nomenklatura/' . $message_info['nom']['id'] . '/' . $message_info['month'], ['absolute' => true]);
+        $settings_url = url('/user/' . $params['uid'], ['absolute' => true]);
+
+        $body = '<p style="margin-bottom:3rem;">На сайт поступило сообщение от клиента:</p>' .
+                '<h2 style="margin:2rem 0 0;">' . $nom_info['label'] . '</h2>' .
+                theme('message_mail', ['message_info' => $message_info]) .
+                '<p style="color:#999999;font-size:12px;margin:0 0 1rem;">Перейти на <a href="' . $product_url . '" target="_blank">страницу продукта</a></p>'.
+                '<div style="margin: 3rem 0;">' .
+                  'Настроить рассылку уведомлений можно в <a href="' . $settings_url . '">Кабинете</a>.'.
+                '</div>';
+
+        $message['subject'] = 'Новое сообщение от клиента на сайте "KCCC GROUP. Производство"';
+        $message['body'][] = $body;
+
+        break;
+
+
+
+      // устаревшее
+    case 'client_notify_daily_changes':
+      $message['subject'] = 'Изменения за прошедшие сутки';
+      $message['body'][] =
+        '<h2>Здравствуйте!</h2>' .
+        '<p>Сводка с изменениями за последние сутки на сайте "Управление заказами":</p>' .
+        $params['text'] .
+        '<p>Перейти к управлению заявками в <a href="' . $front_url . '">Личный кабинет</a></p>';
+
+      break;
+
+    case 'manager_notify_query_correction_new':
+      $message['subject'] = 'Новая корректировка';
+      $message['body'][] =
+        '<h2>Здравствуйте!</h2>' .
+        '<p>Новая корректировка на сайте "Управление заказами":</p>' .
+        'Месяц: ' . $params["month"] . ' ' . $params["year"] . '<br />' .
+        'Продукт: ' . $params["product"] .  '<br />' .
+        ($params["reason"] ? 'Причина: ' . $params["reason"] . '<br />' : '') .
+        ($params["comment"] ? 'Комментарий: ' . $params["comment"] . '<br />' : '') .
+        '<p>Перейти к управлению заявками в <a href="' . $front_url . '">Личный кабинет</a></p>';
+
+      break;
+
+    case 'client_notify_query_correction_new':
+      $message['subject'] = 'Новая корректировка по вашей заявке';
+      $message['body'][] =
+        '<h2>Здравствуйте!</h2>' .
+        '<p>На сайте компании ООО "Кирово-Чепецкий завод Агрохимикат" <a href="' . $front_url . '">"Управление заказами"</a> внесена корректирующая заявка в план производства на ' . $params['month'] . '. </p>' .
+        'Месяц: ' . $params["month"] . ' ' . $params["year"] . '<br />' .
+        'Продукт: ' . $params["product"] .  '<br />' .
+        'Количество: ' . $params["volume"] .  '<br />' .
+        (!empty($params["reason"]) ? 'Причина: ' . $params["reason"] . '<br />' : '') .
+        (!empty($params["comment"]) ? 'Комментарий: ' . $params["comment"] . '<br />' : '') .
+        $params['notification'] .
+        '<p>Перейти к управлению заявками в <a href="' . $front_url . '">Личный кабинет</a></p>';
+
+      break;
+
+    case 'user_notify_plan_import':
+      $message['subject'] = 'Импортирован план на ' . $params['month'];
+      $message['body'][] =
+        '<h2>Здравствуйте!</h2>' .
+        '<p>На сайте компании ООО "Кирово-Чепецкий завод Агрохимикат" <a href="https://prod.kccc.ru">"Управление заказами"</a> внесён план производства на ' . $params['month'] . ' ' . $params["year"] . '. </p>' .
+        '<p>Ознакомиться с планом можно в <a href="https://prod.kccc.ru">Личном кабинете</a></p>';
+
+      break;
+  }
+}
+
+/**
+ * Отправить письмо со сводкой изменений за сутки
+ */
+function mailer_batch_mail_production()
+{
+  // извлечь все пришедшие заявки за прошедние сутки
+  $efquery = new EntityFieldQuery();
+  $efquery
+    ->entityCondition('entity_type', 'query')
+    ->propertyCondition('uid', 0)
+    ->propertyCondition('created', time(), '<')
+    ->propertyCondition('created', time() - 60*60*24, '>=')
+    ->propertyOrderBy('id');
+  $result = $efquery->execute();
+  if (!empty($result['query'])) {
+
+    // разбить по Компаниям
+    $queries_by_companies = [];
+    foreach ($result['query'] as $query) {
+      $query_wr = entity_metadata_wrapper('query', $query->id);
+      if ($query_wr->field_nomenklatura->field_client->value()) {
+        if ($company_id = $query_wr->field_nomenklatura->field_client->getIdentifier()) {
+          if (empty($queries_by_companies[$company_id])) {
+            $queries_by_companies[$company_id] = [
+              'queries' => [],
+              'company_id' => $company_id,
+            ];
+          }
+          $queries_by_companies[$company_id]['queries'][] = $query;
+        }
+      }
+    }
+
+    // для каждого пользователя составить текст письма и поставить в очередь
+    $mail_queue = DrupalQueue::get('daily_mails_queue_legacy');
+    foreach ($queries_by_companies as $company_id => $value) {
+
+      $main_plan_flag = false;
+      $pred_plan_flag = false;
+      $params['text'] = '';
+      foreach ($value['queries'] as $query) {
+        $query_wr = entity_metadata_wrapper('query', $query->id);
+
+        // Уведомления по Установкам
+        $notification =  '';
+        if ($query_wr->field_query_notifications->count()) {
+          $notification =  '<br />ВНИМАНИЕ!<br />';
+          foreach($query_wr->field_query_notifications->getIterator() as $notif_wr) {
+            $notif_arr[$notif_wr->field_qn_produce_unit->tid->value()] = [
+              'name' => $notif_wr->field_qn_produce_unit->name->value(),
+              'message' => $notif_wr->field_qn_notification->value(),
+            ];
+            $notification .=  '<strong>' . $notif_wr->field_qn_produce_unit->name->value() . '</strong>. ' . $notif_wr->field_qn_notification->value() . '<br />';
+          }
+        }
+
+        if (in_array($query_wr->field_query_type->value(), ['correction', 'request'])) {
+          $params['text'] .=
+            'Месяц: ' . t(date('F', $query_wr->field_month->value())) . ' ' . date('Y', $query_wr->field_month->value()) . '<br />' .
+            'Продукт: ' . $query_wr->field_nomenklatura->name->value() . '<br />' .
+            'Количество: ' . $query_wr->field_qty->value() .  '<br />' .
+            ($query_wr->field_query_reason->value() ? 'Причина: ' . $query_wr->field_query_reason->name->value() . '<br />' : '') .
+            ($query_wr->field_comment->value() ? 'Комментарий: ' . $query_wr->field_comment->value() . '<br />' : '') .
+            $notification .
+            '<br />';
+        } elseif ($query_wr->field_query_type->value() == 'plan') {
+          if ($query_wr->field_query_status_client->value() == 'approved' && !$main_plan_flag) {
+            // основной план
+            $params['text'] .= 'Внесён основной план на ' . t(date('F', $query_wr->field_month->value())) . ' ' . date('Y', $query_wr->field_month->value()) . '<br />' .
+              '<br />';
+            $main_plan_flag = true;
+          } elseif ($query_wr->field_query_status_client->value() == 'processing' && !$pred_plan_flag) {
+            // предварительный план
+            $params['text'] .= 'Внесён/изменён предварительный план на ' . t(date('F', $query_wr->field_month->value())) . ' ' . date('Y', $query_wr->field_month->value()) . '<br />' .
+              '<br />';
+            $pred_plan_flag = true;
+          }
+        }
+      }
+
+      if ($users = ext_user_get_users_by_company_id($value['company_id'], ROLE_USER_PRODUCTION)) {
+        foreach ($users as $manager_account) {
+          if (!empty($manager_account->field_notify_once_a_day["und"][0]["value"])) {
+            $params['mail'] = $manager_account->mail;
+            $mail_queue->createItem($params);
+          }
+        }
+      }
+    }
+  }
+}
+
+/**
+ * Отправить письмо со сводкой изменений за сутки
+ */
+function mailer_prod_mail_daily()
+{
+  // собрать последние сообщения за сутки
+  $day_start = helper_get_day_start_from_timestamp();
+  $prev_day_start = $day_start - 24*60*60;
+
+  $efQuery = new EntityFieldQuery();
+  $efQuery
+    ->entityCondition('entity_type', 'message')
+    ->propertyCondition('created', [$prev_day_start, $day_start-1], 'BETWEEN')
+    ->fieldCondition('field_m_author', 'value', [PROD_MESSAGE_AUTHOR_SYS_PROD, PROD_MESSAGE_AUTHOR_PROD],'IN')
+    ->fieldCondition('field_m_nomenklatura', 'target_id', PROD_SERVICE_NOM_ID, '!=')
+    ->propertyOrderBy('id');
+  if ($efResult = $efQuery->execute()) {
+
+    // разбить по Компаниям
+    $messages_by_companies_by_nom = [];
+    foreach ($efResult['message'] as $message) {
+      $message_info = prod_message_get_info($message->id);
+      // оповещаем обо всех изменениях, кроме утверждения плана
+      if (!isset($message_info['changes']['list'][PROD_CHANGE_APPROVE])) {
+        $month_start = $message_info['month'];
+        $nom_info = prod_nomenklatura_get_info($message_info['nom']['id']);
+        $nom_id = $nom_info['id'];
+        $company_id = $nom_info['company_id'];
+
+        if (empty($messages_by_companies_by_nom[$company_id])) {
+          $messages_by_companies_by_nom[$company_id] = [
+            'id' => $company_id,
+            'nom' => [],
+          ];
+        }
+        if (empty($messages_by_companies_by_nom[$nom_info['company_id']]['nom'][$nom_id])) {
+          $messages_by_companies_by_nom[$nom_info['company_id']]['nom'][$nom_id] = [
+            'id' => $nom_id,
+            'months' => [],
+          ];
+        }
+        if (empty($messages_by_companies_by_nom[$nom_info['company_id']]['nom'][$nom_id]['months'][$month_start])) {
+          $messages_by_companies_by_nom[$nom_info['company_id']]['nom'][$nom_id]['months'][$month_start] = [];
+        }
+
+        $messages_by_companies_by_nom[$nom_info['company_id']]['nom'][$nom_id]['months'][$month_start][$message->id] = $message_info;
+      }
+    }
+
+
+    // поставить в очередь на отправку
+    $mail_queue = DrupalQueue::get('daily_mails_queue');
+    foreach ($messages_by_companies_by_nom as $company_id => $company) {
+      if ($users = ext_user_get_users_by_company_id($company_id, CLIENT_RID)) {
+        foreach ($users as $user) {
+          // получить настройки почтовой рассылки пользователя
+          $user_settings = variable_get('user_settings_' . $user->uid);
+          // включена ли рассылка (по умолчанию Вкл)
+          if (!isset($user_settings['mail']['base']) || $user_settings['mail']['base']) {
+            // отправлять раз в сутки? (по умолчанию)
+            if (!isset($user_settings['mail']['frequency']) || $user_settings['mail']['frequency'] == 2) {
+              // если сообщения только по отключенной номенклатуре, то текст будет пустым
+              if ($text = mailer_get_daily_mail_text($company['nom'], $user->uid)) {
+                $mail_queue->createItem(['uid' => $user->uid, 'email' => $user->mail, 'text' => $text]);
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+
+}
+
+/**
+ * queue callback
+ */
+function mailer_send_daily_mails($params)
+{
+  drupal_mail('mailer', 'client_daily_mail', $params['email'], 'ru', $params);
+}
+
+/**
+ * queue callback
+ */
+function mailer_send_daily_mails_legacy($params)
+{
+  drupal_mail('mailer', 'client_notify_daily_changes', $params['mail'], 'ru', $params);
+}
+
+/**
+ * Вернуть текст письма с изменениями за день
+ * для конкретного пользователя (у каждого могут отличаться настройки по номенклатуре)
+ * @param $noms
+ * @param $uid
+ *
+ * @return string
+ */
+function mailer_get_daily_mail_text($noms, $uid)
+{
+  $text = '';
+
+  foreach ($noms as $nom_id => &$nom) {
+    // получить настройки почтовой рассылки пользователя
+    $user_settings = variable_get('user_settings_' . $uid);
+    // значение рассылки для конкретной Номенклатуры (по умолчанию Вкл)
+    if (!isset($user_settings['mail']['nom'][$nom_id]) || $user_settings['mail']['nom'][$nom_id]) {
+      $nom_info = prod_nomenklatura_get_info($nom_id);
+
+      ksort($nom['months']);
+      foreach ($nom['months'] as $month_start => $messages) {
+        $month_formatted = helper_month_label_ru(date('n', $month_start)) . ' ' . date('Y', $month_start);
+        krsort($messages);
+        $message = array_shift($messages);
+        $message_info = prod_message_get_info($message['id']);
+        $product_url = url('/production/nomenklatura/' . $message_info['nom']['id'] . '/' . $message_info['month'], ['absolute' => true]);
+
+        // проверить настройки уведомлений для Тем сообщений
+        $send = false;
+        foreach ($message_info['changes']['list'] as $chid => $change) {
+          // для утверждения плана по умолчанию - выкл
+          if ($chid == PROD_CHANGE_APPROVE) {
+            if (!empty($user_settings['mail']['themes'][$chid])) {
+              $send = true;
+              break;
+            }
+          }
+          // остальные по умолчанию все вкл
+          else {
+            if (!isset($user_settings['mail']['themes'][$chid]) || $user_settings['mail']['themes'][$chid]) {
+              $send = true;
+              break;
+            }
+          }
+        }
+
+        if ($send) {
+          $text .= '<h2 style="margin:2rem 0 0;">' . $nom_info['label'] . '</h2>';
+          $text .= '<h4 style="color:#333333;font-weight:400;margin:0.5rem 0 0.1rem;">Последнее изменение за ' . $month_formatted . '</h4>';
+          $text .= theme('message_mail', ['message_info' => $message_info]);
+          $text .= '<p style="color:#999999;font-size:12px;margin:0 0 1rem;">Перейти на <a href="' . $product_url . '" target="_blank">страницу продукта</a></p>';
+        }
+      }
+    }
+  }
+
+  return $text;
+}
+

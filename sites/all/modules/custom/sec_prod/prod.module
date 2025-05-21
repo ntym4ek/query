@@ -1,0 +1,1343 @@
+<?php
+
+// количество дней, через которое возможно начало производства после подачи заявки
+// также определяет количество дней до конца месяца, за которое нельзя подать заявку на изменения
+const PROD_DAYS_BEFORE_PRODUCE_START = 7;
+
+// типы Записей плана (поле field_pp_type)
+const PROD_PLAN_TYPE_PRED = 1;
+const PROD_PLAN_TYPE_APPR = 2;
+const PROD_PLAN_TYPE_OPER = 3;
+const PROD_SERVICE_NOM_ID = 583;     // id сервисных работ из справочника Номенклатуры
+
+// авторы Сообщений (поле field_m_author)
+const PROD_MESSAGE_AUTHOR_CLIENT = 1;
+const PROD_MESSAGE_AUTHOR_SYS_CLIENT = 3;   // для добавления сообщений со стороны клиента
+                                            // (например отсутствие сырья влечёт изменение со стороны производства)
+                                            // и визуально (выделение цветом) вина на производстве
+                                            // система при импорте добавит сообщение со стороны клиента об отсутствии сырья
+const PROD_MESSAGE_AUTHOR_PROD = 2;
+const PROD_MESSAGE_AUTHOR_SYS_PROD = 4;     // например, добавить сообщение об Утверждение плана, при импорте плана
+
+// список Изменений
+const  PROD_CHANGE_ADD_TO_PLAN = 4738;
+const  PROD_CHANGE_APPROVE = 4744;
+const  PROD_CHANGE_DENY = 4745;
+const  PROD_CHANGE_CANCEL = 4741;
+const  PROD_CHANGE_VOLUME = 4740;
+const  PROD_CHANGE_DATE = 4739;
+const  PROD_CHANGE_SCHEDULE = 4742;
+const  PROD_CHANGE_DOCS = 4847;
+const  PROD_CHANGE_P_UNIT = 4852;
+
+// варианты Предупреждений
+const PROD_WARNING_YELLOW = 1;
+const PROD_WARNING_RED = 2;
+
+// откуда брать последние данные о дате и объёме
+const DATE_VOL_FROM_MESSAGE = 1;
+const DATE_VOL_FROM_PLAN = 2;
+
+/**
+ * Implementation of hook_menu().
+ */
+function prod_menu()
+{
+  $items['production/nomenklatura'] = [
+    'title' => 'Заявки на производство',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => ['prod_nom_list_form'],
+    'access callback' => 'ext_user_has_roles',
+    'access arguments' => [[ADMIN_RID, CLIENT_RID, MANAGER_RID]],
+    'file' => 'includes/prod.pages.inc',
+    'type' => MENU_NORMAL_ITEM,
+    'menu_name' => 'main-menu',
+  ];
+  $items['production/nomenklatura/%/%'] = [
+    'title' => 'Заявка на выпуск продукта',
+    'page callback' => 'prod_nom_page',
+    'page arguments' => [2, 3],
+    'access callback' => 'ext_user_has_roles',
+    'access arguments' => [[ADMIN_RID, CLIENT_RID, MANAGER_RID]],
+    'file' => 'includes/prod.pages.inc',
+    'type' => MENU_NORMAL_ITEM,
+  ];
+  $items['production/message/add'] = [
+    'title' => 'Запрос на изменение',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => ['prod_message_add_form', 3, 4],
+    'access callback' => 'ext_user_has_roles',
+    'access arguments' => [[ADMIN_RID, CLIENT_RID, MANAGER_RID]],
+    'file' => 'includes/prod.pages.inc',
+    'type' => MENU_NORMAL_ITEM,
+  ];
+  $items['production/year-plan'] = [
+    'title' => 'План на сезон',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => ['prod_year_plan_form'],
+    'access callback' => 'ext_user_has_roles',
+    'access arguments' => [[ADMIN_RID, CLIENT_RID, MANAGER_RID]],
+    'file' => 'includes/prod.pages.inc',
+    'type' => MENU_NORMAL_ITEM,
+    'menu_name' => 'main-menu',
+  ];
+  $items['production/year-plan-fact'] = [
+    'title' => 'План-факт',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => ['prod_year_plan_fact_form'],
+    'access callback' => 'ext_user_has_roles',
+    'access arguments' => [[ADMIN_RID, MANAGER_RID]],
+    'file' => 'includes/prod.pages.inc',
+    'type' => MENU_NORMAL_ITEM,
+    'menu_name' => 'main-menu',
+  ];
+
+  return $items;
+}
+
+/**
+ * Implements hook_cron_queue_info().
+ */
+function prod_cron_queue_info()
+{
+  $queues['prod_queue_worker'] = array(
+    'worker callback' => 'prod_queue_callback',
+  );
+
+  return $queues;
+}
+
+
+/**
+ * Implements hook_cron()
+ */
+function prod_cron()
+{
+  // todo однократно после восьми отправить письмо с изменениями (при пятиминутном интервале крона)
+  // todo кривое решение, может не сработать если сервер не дёрнет крон в этот промежуток
+  if (REQUEST_TIME >= strtotime('07:27') && REQUEST_TIME < strtotime('07:34')) {
+     mailer_prod_mail_daily();
+  }
+}
+
+/**
+ * hook_import_processors_alter
+ */
+function prod_import_processors_alter(&$processors)
+{
+//  return;
+  if (variable_get('import_pr_1с_enable', 0)) {
+    $path = drupal_get_path('module', 'prod') . '/includes/';
+    $processors['first_queue'][] =  ['mask' => '/^prod_dav.*\.json/',                  'include' => $path . 'prod.import.inc', 'func' => 'prod_client_import', 'archive' => 'prod'];
+    $processors['first_queue'][] =  ['mask' => '/^prod_ust.*\.json/',                  'include' => $path . 'prod.import.inc', 'func' => 'prod_produce_units_import', 'archive' => 'prod'];
+    $processors['first_queue'][] =  ['mask' => '/^prod_cause.*\.json/',                'include' => $path . 'prod.import.inc', 'func' => 'prod_changes_import', 'archive' => 'prod'];
+    $processors['first_queue'][] =  ['mask' => '/^prod_nom.*\.json/',                  'include' => $path . 'prod.import.inc', 'func' => 'prod_nomenklatura_import', 'archive' => 'prod'];
+
+    $processors['first_queue'][] =  ['mask' => '/^prod_message_import_pred_.*\.json/', 'include' => $path . 'prod.import.inc', 'func' => 'prod_message_import', 'archive' => 'prod'];
+    $processors['last_queue'][]  =  ['mask' => '/^prod_plan_pred.*\.json/',            'include' => $path . 'prod.import.inc', 'func' => 'prod_plan_import', 'archive' => 'prod'];
+
+    $processors['last_queue'][]  =  ['mask' => '/^prod_message_import_oper_.*\.json/', 'include' => $path . 'prod.import.inc', 'func' => 'prod_message_import', 'archive' => 'prod'];
+    $processors['last_queue'][]  =  ['mask' => '/^prod_plan_oper.*\.json/',            'include' => $path . 'prod.import.inc', 'func' => 'prod_plan_import', 'archive' => 'prod'];
+  }
+}
+
+/**
+ * Создать Сообщение
+ */
+function prod_message_create($params)
+{
+  $transaction = db_transaction();
+  try {
+    $message = entity_create('message', [
+      'type' => 'message',
+      'created' => $params['created'],
+    ]);
+    entity_save('message', $message);
+
+    $message_wr = entity_metadata_wrapper('message', $message);
+    $message_wr->field_m_month = $params['month_ts'];
+    $message_wr->field_m_nomenklatura = $params['nom_id'];
+    $message_wr->field_m_author = $params['author'];
+    if (!empty($params['parent_id'])) $message_wr->field_m_parent = $params['parent_id'];
+    if (!empty($params['id_1c'])) $message_wr->field_1c_id = $params['id_1c'];
+    if (!empty($params['comment'])) $message_wr->field_comment = $params['comment'];
+    if (!empty($params['changes'])) $message_wr->field_m_changes = $params['changes'];
+    if (!empty($params['reason'])) $message_wr->field_m_reason = $params['reason'];
+    if (!empty($params['warning'])) $message_wr->field_m_warning = $params['warning'];
+    if (!empty($params['params'])) $message_wr->field_m_params = drupal_json_encode($params['params']);
+    if (!empty($params['files'])) {
+      foreach($params['files'] as $file) {
+        $message_wr->field_files[] = (array)$file;
+      }
+    }
+    $message_wr->save();
+  } catch (Exception $e) {
+    $transaction->rollback();
+    watchdog_exception('migration', $e);
+  }
+
+  return $message ?? false;
+}
+
+/**
+ * Вернуть массив сообщений для Номенклатуры и Месяца
+ * с обратной сортировкой id.
+ * По дате создания 1с не подойдёт, так как в 1с может быть следующее:
+ *   id_1c: 26819, создано в 1с: 31.03.2025 11:57:37
+ *   id_1c: 26936, создано в 1с: 31.03.2025 03:21:06
+ * @param $month_start
+ * @param $nom_id
+ */
+function prod_message_get_all($month_ts, $nom_id)
+{
+  $efQuery = new EntityFieldQuery();
+  $efQuery->entityCondition('entity_type', 'message');
+  $efQuery->fieldCondition('field_m_month', 'value', $month_ts);
+  $efQuery->fieldCondition('field_m_nomenklatura', 'target_id', $nom_id);
+  $efQuery->propertyOrderBy('id', 'DESC');
+  if ($efResult = $efQuery->execute()) {
+    $entities = entity_load('message', array_keys($efResult['message']));
+  }
+
+  return $entities ?? [];
+}
+
+/**
+ * Вернуть последнее Сообщение по Месяцу и Номенклатуре
+ * @param $month_ts
+ * @param $nom_id
+ * @param $owner - автор сообщения. Массив, так как сообщения с каждой стороны могут быть автоматическими,
+ *                  например [PROD_MESSAGE_AUTHOR_PROD, PROD_MESSAGE_AUTHOR_SYS_PROD].
+ */
+function prod_message_get_last($month_ts, $nom_id, $owner = null)
+{
+  $efQuery = new EntityFieldQuery();
+  $efQuery->entityCondition('entity_type', 'message');
+  $efQuery->fieldCondition('field_m_month', 'value', $month_ts);
+  $efQuery->fieldCondition('field_m_nomenklatura', 'target_id', $nom_id);
+  if (!empty($owner)) {
+    $efQuery->fieldCondition('field_m_author', 'value', $owner);
+  }
+  $efQuery->propertyOrderBy('id', 'DESC');
+  $efQuery->range(0, 1);
+
+  if ($efResult = $efQuery->execute()) {
+    $entities = entity_load('message', [reset($efResult['message'])->id]);
+  }
+
+  return empty($entities) ? false: reset($entities);
+}
+
+/**
+ * Удалить Сообщения, все или за месяц
+ * @param $month_ts
+ */
+function prod_message_delete_all($month_ts = null)
+{
+  $efquery = new EntityFieldQuery();
+  $efquery->entityCondition('entity_type', 'message');
+  if ($month_ts) {
+    $efquery->fieldCondition('field_m_month', 'value', $month_ts);
+  }
+  $result = $efquery->execute();
+  if ($result) {
+    entity_delete_multiple('message', array_keys($result['message']));
+  }
+}
+
+/**
+ * Вернуть информацию о Сообщении
+ * @param $mid
+ * @return array
+ */
+function prod_message_get_info($mid)
+{
+  if (empty($mid)) return [];
+
+  $message_wr = entity_metadata_wrapper('message', $mid);
+
+  $author = $message_wr->field_m_author->value();
+  $params = drupal_json_decode($message_wr->field_m_params->value());
+
+  // обработка Изменения
+  $changes = [];
+  foreach ($message_wr->field_m_changes->getIterator() as $change_wr) {
+    $chid = $change_wr->value() ? $change_wr->getIdentifier() : '';
+    $change = $change_wr->value() ? $change_wr->name->value() : '';
+    $volume_from_formatted = $params['volume']['from'] ? helper_number_format($params['volume']['from'], 2, ' ') : '';
+    $volume_to_formatted = helper_number_format($params['volume']['to'], 2, ' ') . ' л(кг)';
+    $date_from_formatted = date('n', $params['date']['from']) == date('n', $params['date']['to']) ? date('j', $params['date']['from']) : date('j', $params['date']['from']) . ' ' . helper_month_label_ru(date('n', $params['date']['from']) , true);
+    $date_to_formatted = date('j', $params['date']['to']) . ' ' . helper_month_label_ru(date('n', $params['date']['to']) , true);
+    // внесение в план
+    if ($chid == PROD_CHANGE_ADD_TO_PLAN) {
+      if (!empty($params['volume'])) {
+        $change = $change . ' <span class="nowrap">' . $volume_to_formatted . '</span>' . ' <span class="nowrap">на ' . $date_to_formatted . '</span>';
+      }
+    }
+    // изменение объёма
+    if ($chid == PROD_CHANGE_VOLUME) {
+      if (!empty($params['volume'])) {
+        $change = $change . ' <span class="nowrap">c ' . $volume_from_formatted . '</span>' . ' <span class="nowrap">до ' . $volume_to_formatted . '</span>';
+      }
+    }
+    // перенос
+    if ($chid == PROD_CHANGE_DATE) {
+      if (!empty($params['date'])) {
+        $change = $change . ' <span class="nowrap">с ' . $date_from_formatted . ' на ' . $date_to_formatted . '</span>';
+      }
+    }
+
+    if (in_array($author, [PROD_MESSAGE_AUTHOR_CLIENT, PROD_MESSAGE_AUTHOR_SYS_CLIENT])) {
+      $change = str_replace('Отмена', 'отмену', $change);
+    }
+
+    $changes[$chid] = $change;
+  }
+
+  $changes_formatted = '';
+  $connector = '';
+  for ($i=0; $i<count($changes); $i++) {
+    $chid = array_keys($changes)[$i];
+    $change = $changes[$chid];
+    if ($i) {
+      $connector = ($i = count($changes)-1) ? ' и ' : ', ';
+      $change = drupal_strtolower($change);
+    }
+    $changes_formatted .= $connector . $change;
+  }
+  if($changes_formatted && in_array($author, [PROD_MESSAGE_AUTHOR_CLIENT, PROD_MESSAGE_AUTHOR_SYS_CLIENT])) {
+    $changes_formatted = 'Запрос на ' . drupal_strtolower($changes_formatted);
+  }
+
+  if (!$changes_formatted && in_array($author, [PROD_MESSAGE_AUTHOR_PROD, PROD_MESSAGE_AUTHOR_SYS_PROD])) {
+    $changes_formatted = 'Без изменений';
+  }
+
+  // причины
+  $reason = $message_wr->field_m_reason->value() ? $message_wr->field_m_reason->name->value() : '';
+
+    // если автор система, вывести в причинах "Системное сообщение"
+  if (in_array($author, [PROD_MESSAGE_AUTHOR_SYS_CLIENT, PROD_MESSAGE_AUTHOR_SYS_PROD])) {
+    $reason = 'Системное сообщение';
+  }
+
+  // подготовить файлы
+  $files = [];
+  foreach($message_wr->field_files->getIterator() as $file_wr)
+  {
+    $fid = $file_wr->file->fid->value();
+    $files[$fid] = [
+      'id' => $fid,
+      'url' => $file_wr->file->url->value(),
+      'name' => $file_wr->file->name->value(),
+    ];
+  }
+
+  return [
+    'id' => $mid,
+    'id_1c' => $message_wr->field_1c_id->value(),
+    'month' => $message_wr->field_m_month->value(),
+    'nom' => [
+      'id' => $message_wr->field_m_nomenklatura->getIdentifier(),
+    ],
+    'author' => $author,
+    'changes' => [
+      'list' => $changes,
+      'formatted' => $changes_formatted,
+    ],
+    'reason' => $reason,
+    'comment' => $message_wr->field_comment->value(),
+    'created' => $message_wr->created->value(),
+    'params' => $params,
+    'warning' => $message_wr->field_m_warning->value() == PROD_WARNING_RED,
+    'files' => $files,
+  ];
+}
+
+/**
+ * Вернуть последние включённые в план значения Даты и Объёма выпуска.
+ * Используется в истории Сообщений.
+ * @param $month_start
+ * @param $nom_id
+ * @return array
+ */
+function prod_message_get_last_date_volume($month_start, $nom_id, $from = DATE_VOL_FROM_MESSAGE)
+{
+  $date_last = null;
+  $volume_last = 0;
+  if ($from == DATE_VOL_FROM_PLAN && $plan_rec_last = prod_plan_record_get_last($month_start, $nom_id)) {
+    $plan_rec_last_info = prod_plan_record_get_info($plan_rec_last->id);
+    $date_last = $plan_rec_last_info['date'];
+    $volume_last = $plan_rec_last_info['volume'];
+  }
+
+  // берём из Сообщений, так Сообщения импортируются последовательно,
+  // а каждый последующий файл Плана затирает предыдущий и история может стать некорректной
+  if (($from == DATE_VOL_FROM_MESSAGE || empty($plan_rec_last)) && $message_last = prod_message_get_last($month_start, $nom_id, PROD_MESSAGE_AUTHOR_PROD)) {
+    $message_last_info = prod_message_get_info($message_last->id);
+    $date_last = $message_last_info['params']['date']['to'];
+    $volume_last = $message_last_info['params']['volume']['to'];
+  }
+
+  return [
+    'date' => $date_last,
+    'volume' => $volume_last,
+  ];
+}
+
+/**
+ * Вернуть Сообщение по 1C ID
+ */
+function prod_message_get_by_1c_id($id_1c)
+{
+  $efquery = new EntityFieldQuery();
+  $result = $efquery
+    ->entityCondition('entity_type', 'message')
+    ->fieldCondition('field_1c_id', 'value', $id_1c)
+    ->execute();
+  if ($result) {
+    $entities = entity_load('message', [reset($result['message'])->id]);
+  }
+  return empty($entities) ? false: reset($entities);
+}
+
+/**
+ * Экспортировать Сообщение от Пользователя
+ * @param $query_wr
+ */
+function prod_message_export($message_id)
+{
+  if ($message_info = prod_message_get_info($message_id)) {
+    $nom_info = prod_nomenklatura_get_info($message_info['nom']['id']);
+
+    $message_arr = [
+      'id' => $message_info['id'],
+      'month' => date('d.m.Y', $message_info['month']),
+      'nom_1c' => $nom_info['id_1c'],
+      'artikul' => $nom_info['artikul'],
+      'volume' => $message_info['params']['volume']['to'],
+      'date' => !empty($message_info['params']['date']['to']) ? date('d.m.Y', $message_info['params']['date']['to']) : '',
+      'comment' => $message_info['comment'],
+    ];
+
+    $json = drupal_json_encode($message_arr);
+    $filename = 'prod_message_export_' . $message_arr['id'] . '.json';
+    $directory = 'private://exchange/';
+    file_prepare_directory($directory, FILE_CREATE_DIRECTORY | FILE_MODIFY_PERMISSIONS);
+    file_unmanaged_save_data($json, $directory . $filename);
+
+    return true;
+  }
+
+  return false;
+}
+
+/**
+ * Вернуть список id Сообщений с предупреждениями и определить последнее
+ * @param $month_start
+ * @param $nom_id
+ */
+function prod_nomenklatura_get_warnings($month_start, $nom_id)
+{
+  $warnings = [
+    'list' => [],
+    'last_warning' => 0,
+  ];
+  $dbr = db_select('field_data_field_m_warning', 'fw');
+  $dbr->condition('fw.field_m_warning_value', [PROD_WARNING_YELLOW, PROD_WARNING_RED], 'IN');
+  $dbr->innerJoin('field_data_field_m_month', 'fm', 'fm.entity_id = fw.entity_id');
+  $dbr->condition('fm.field_m_month_value', $month_start);
+  $dbr->innerJoin('field_data_field_m_nomenklatura', 'fn', 'fn.entity_id = fw.entity_id');
+  $dbr->condition('fn.field_m_nomenklatura_target_id', $nom_id);
+  $dbr->addField('fw', 'entity_id', 'mid');
+  $dbr->addField('fw', 'field_m_warning_value', 'warning');
+  $dbr->orderBy('mid', 'DESC');
+  $dbr->distinct();
+  if ($result = $dbr->execute()->fetchAllKeyed()) {
+    $warnings['list'] = $result;
+    $warnings['last_warning'] = array_values($result)[0];
+  }
+
+  return $warnings;
+}
+
+/**
+ * Создать запись плана
+ * 'type' - тип плана:  PROD_PLAN_TYPE_PRED - предварительный (заносится через сообщение или импорт плана)
+ *                      PROD_PLAN_TYPE_APPR - утверждённый (заносится только через импорт плана)
+ *                      PROD_PLAN_TYPE_OPER - оперативный (заносится только через сообщение)
+ */
+function prod_plan_record_create($fields)
+{
+  $transaction = db_transaction();
+  try {
+    $plan_rec = entity_create('plan', [
+      'type' => 'plan',
+      'created' => $fields['import_time_ts'],
+    ]);
+    entity_save('plan', $plan_rec);
+
+    $plan_rec_wr = entity_metadata_wrapper('plan', $plan_rec);
+    $plan_rec_wr->field_pp_month = $fields['month_ts'];
+    $plan_rec_wr->field_pp_nomenklatura = $fields['nom_id'];
+    $plan_rec_wr->field_pp_type = $fields['type'];
+    $plan_rec_wr->field_pp_load = drupal_json_encode($fields['load']);
+    $plan_rec_wr->save();
+  } catch (Exception $e) {
+    $transaction->rollback();
+    watchdog_exception('migration', $e);
+  }
+
+  return $plan_rec ?? false;
+}
+
+/**
+ * Вернуть последнюю запись плана по Месяцу и Номенклатуре
+ * @param $month_ts
+ * @param $nom_id
+ */
+function prod_plan_record_get_last($month_ts, $nom_id)
+{
+  $efQuery = new EntityFieldQuery();
+  $efQuery->entityCondition('entity_type', 'plan');
+  $efQuery->fieldCondition('field_pp_month', 'value', $month_ts);
+  $efQuery->fieldCondition('field_pp_nomenklatura', 'target_id', $nom_id);
+  $efQuery->propertyOrderBy('id', 'DESC');
+  $efQuery->range(0, 1);
+
+  if ($efResult = $efQuery->execute()) {
+    $entities = entity_load('plan', [reset($efResult['plan'])->id]);
+  }
+
+  return empty($entities) ? false: reset($entities);
+}
+
+/**
+ * Вернуть массив информации о Записи плана
+ */
+function prod_plan_record_get_info($id)
+{
+  $plan_rec_wr = entity_metadata_wrapper('plan', $id);
+  if (!$plan_rec_wr->value()) return [];
+
+  $volume = 0;
+  $date = 0;
+  if ($load = drupal_json_decode($plan_rec_wr->field_pp_load->value())) {
+    foreach ($load as $pu_id => $pu_item) {
+      foreach ($pu_item['pu_load'] as $day => $output) {
+        $volume += $output;
+        if (!$date || $date > $day) $date = $day;
+      }
+    }
+  }
+
+  return [
+    'id' => $plan_rec_wr->getIdentifier(),
+    'created' => $plan_rec_wr->created->value(),
+    'nom' => [
+      'id' => $plan_rec_wr->field_pp_nomenklatura->getIdentifier(),
+      'label' => $plan_rec_wr->field_pp_nomenklatura->label(),
+      'label_client' => $plan_rec_wr->field_pp_nomenklatura->field_oc_name_davalec->value(),
+      'artikul' => $plan_rec_wr->field_pp_nomenklatura->field_oc_artikul->value(),
+      'artikul_client' => $plan_rec_wr->field_pp_nomenklatura->field_oc_artikul_davalec->value(),
+    ],
+    'month' => [
+      'raw' => $plan_rec_wr->field_pp_month->value(),
+    ],
+    'type' => $plan_rec_wr->field_pp_type->value(),
+    'volume' => $volume,
+    'date' => $date,                                // дата начала выпуска
+    'load' => $load,
+  ];
+}
+
+/**
+ * Удалить Записи плана, все или за месяц
+ * с возможностью сохранения только Записей утверждённого плана
+ * @param $month_ts
+ * @param $keep_appr - сохранить Утверждённый план
+ */
+function prod_plan_record_delete_all($month_ts = null, $keep_appr = false)
+{
+  $efquery = new EntityFieldQuery();
+  $efquery->entityCondition('entity_type', 'plan');
+  if ($month_ts) {
+    $efquery->fieldCondition('field_pp_month', 'value', $month_ts);
+  }
+  if ($keep_appr) {
+    $efquery->fieldCondition('field_pp_type', 'value', PROD_PLAN_TYPE_APPR, '!=');
+  }
+  $result = $efquery->execute();
+  if ($result) {
+    entity_delete_multiple('plan', array_keys($result['plan']));
+  }
+}
+
+/**
+ * Удалить Записи плана по Месяцу и Номенклатуре (кроме записей утверждённого плана)
+ * @param $month_ts
+ * @param $nom_id
+ */
+function prod_plan_record_delete($month_ts, $nom_id)
+{
+  $efquery = new EntityFieldQuery();
+  $efquery->entityCondition('entity_type', 'plan');
+  if ($month_ts) {
+    $efquery->fieldCondition('field_pp_month', 'value', $month_ts);
+    $efquery->fieldCondition('field_pp_nomenklatura', 'target_id', $nom_id);
+    // сервисные записи удалить в тч для Утв. плана
+    if ($nom_id != PROD_SERVICE_NOM_ID) {
+      $efquery->fieldCondition('field_pp_type', 'value', PROD_PLAN_TYPE_APPR, '!=');
+    }
+  }
+  $result = $efquery->execute();
+  if ($result) {
+    entity_delete_multiple('plan', array_keys($result['plan']));
+  }
+}
+
+/**
+ * Проверить наличие утверждённого плана на месяц
+ */
+function prod_plan_has_approved($month_start)
+{
+  $fid = drupal_hash_base64(__FUNCTION__ . $month_start);
+  $result = &drupal_static($fid);
+
+  if (!isset($result)) {
+    $efQuery = new EntityFieldQuery();
+    $efResult = $efQuery
+      ->entityCondition('entity_type', 'plan')
+      ->fieldCondition('field_pp_month', 'value', $month_start)
+      ->fieldCondition('field_pp_type', 'value', PROD_PLAN_TYPE_APPR)
+      ->count()
+      ->execute();
+
+    $result = (bool)$efResult;
+  }
+
+  return $result;
+}
+
+/**
+ * Вернуть номенклатуру по 1с ID, а если нет - создать.
+ * Артикул приходится передавать на случай, если какой-то из импортируемых файлов всё ещё не передаёт ID номенклатуры.
+ * В таком случае, будет создана ном по артикулу, а затем для файла содержащего ID, ещё одна ном по ID.
+ * Добавляем дополнительную проверку наличие ном по артикулу и заполнять пустой ID при наличии в файле.
+ */
+function prod_nomenklatura_get_by_1c_params($id_1c, $artikul_1c = null)
+{
+  if (empty($id_1c) && empty($artikul_1c)) return false;
+
+  $term = prod_nomenklatura_get_by_artikul($artikul_1c);
+  // если ном найдена, там пустой ID, а в файле ID есть, задать ID
+  if ($term && empty($term->field_1c_id['und'][0]['value']) && $id_1c) {
+    $term->field_1c_id['und'][0]['value'] = $id_1c;
+    taxonomy_term_save($term);
+  }
+
+  $vid = taxonomy_vocabulary_machine_name_load('nomenklatura')->vid;
+  if ($id_1c) {
+    $query = new EntityFieldQuery();
+    $terms = $query
+      ->entityCondition('entity_type', 'taxonomy_term')
+      ->propertyCondition('vid', $vid)
+      ->fieldCondition('field_1c_id', 'value', $id_1c)
+      ->execute();
+    if ($terms) {
+      // если найдено несколько, это ошибка. записать в лог
+      if (count($terms) > 1) {
+        watchdog('import', 'Найдено несколько записей Номенклатуры по 1c ID: @id', ['@id' => $id_1c], WATCHDOG_WARNING);
+      }
+      $term = reset($terms['taxonomy_term']);
+    }
+  }
+
+  if (!$term) {
+    $term = (object)array(
+      'vid' => $vid,
+      'name' => 'Номенклатура с 1c ID "' . $id_1c . '" и артикулом "' . $artikul_1c . '" отсутствует в справочнике. Создана пустая запись.',
+    );
+    if ($id_1c) $term->field_1c_id = ['und' => [0 => ['value' => $id_1c]]];
+    if ($artikul_1c) $term->field_oc_artikul = ['und' => [0 => ['value' => $artikul_1c]]];
+    taxonomy_term_save($term);
+  }
+  $entities = entity_load('taxonomy_term', [$term->tid]);
+
+  return empty($entities) ? false: reset($entities);
+}
+
+function prod_nomenklatura_get_by_artikul($artikul_1c)
+{
+  if (!$artikul_1c) return false;
+
+  $vid = taxonomy_vocabulary_machine_name_load('nomenklatura')->vid;
+  $query = new EntityFieldQuery();
+  $terms = $query
+    ->entityCondition('entity_type', 'taxonomy_term')
+    ->propertyCondition('vid', $vid)
+    ->fieldCondition('field_oc_artikul', 'value', $artikul_1c)
+    ->execute();
+  if ($terms) {
+    // если найдено несколько, это ошибка. записать в лог
+    if (count($terms) > 1) {
+      watchdog('import', 'Найдено несколько записей Номенклатуры по артикулу: @id', ['@id' => $artikul_1c], WATCHDOG_WARNING);
+    }
+    $term = reset($terms['taxonomy_term']);
+    $entities = entity_load('taxonomy_term', [$term->tid]);
+  }
+
+  return empty($entities) ? false: reset($entities);
+}
+
+/**
+ * Вернуть сортированный список Номенклатуры по заданным параметрам в массиве $params
+ * 'company_ids' - массив id компаний
+ *
+ * @return array - краткая информация по Ном
+ **/
+function prod_nomenklatura_get_list($params)
+{
+  $dbr = db_select('taxonomy_term_data', 't');
+  $dbr->innerJoin('field_data_field_client', 'fc', 'fc.entity_id = t.tid');
+  if (!empty($params['company_ids'])) {
+    $dbr->condition('fc.field_client_tid', [$params['company_ids']], 'IN');
+  }
+  $dbr->addField('t', 'tid', 'nom_id');
+  $dbr->addField('fc', 'field_client_tid', 'company_id');
+  $dbr->distinct();
+  $dbr->orderBy('t.name');
+  $result = $dbr->execute()->fetchAllAssoc('nom_id');
+
+  return $result;
+}
+
+/**
+ * Вернуть список Номенклатуры из Сообщений по заданным параметрам в массиве $params
+ * 'month_ts' - * unix timestamp, начало месяца, за который вернуть заявки
+ * 'company_ids' - массив tid клиента
+ *
+ * @return array - краткая информация по Ном
+ **/
+function prod_nomenklatura_get_list_by_messages($params)
+{
+  $dbr = db_select('eck_message', 'm');
+  if (!empty($params['month_ts'])) {
+    $dbr->innerJoin('field_data_field_m_month', 'fm', 'fm.entity_id = m.id');
+    $dbr->condition('fm.field_m_month_value', $params['month_ts']);
+  }
+  $dbr->innerJoin('field_data_field_m_nomenklatura', 'fn', 'fn.entity_id = m.id');
+  $dbr->condition('fn.field_m_nomenklatura_target_id', PROD_SERVICE_NOM_ID, '<>');
+  $dbr->addField('fn', 'field_m_nomenklatura_target_id', 'nom_id');
+  $dbr->innerJoin('field_data_field_client', 'fc', 'fc.entity_id = fn.field_m_nomenklatura_target_id');
+  if (!empty($params['company_ids'])) {
+    $dbr->condition('fc.field_client_tid', [$params['company_ids']], 'IN');
+  }
+  $dbr->addField('fc', 'field_client_tid', 'company_id');
+  $dbr->distinct();
+
+  return $dbr->execute()->fetchAllAssoc('nom_id');
+}
+
+/**
+ * Вернуть список Номенклатуры из Плана по заданным параметрам в массиве $params
+ * 'month_ts' - * unix timestamp, начало месяца, за который вернуть заявки
+ * 'date_ts' -  unix timestamp, начало даты, включительно по которую вернуть заявки (по полю created)
+ * 'pu_ids' - массив tid установок
+ * 'company_ids' - массив tid клиента
+ *
+ * @return array - краткая информация по Ном
+ **/
+function prod_nomenklatura_get_list_by_plan($params)
+{
+  $dbr = db_select('eck_plan', 'p');
+  if (!empty($params['month_ts'])) {
+    $dbr->innerJoin('field_data_field_pp_month', 'fm', 'fm.entity_id = p.id');
+    $dbr->condition('fm.field_pp_month_value', $params['month_ts']);
+  }
+  $dbr->innerJoin('field_data_field_pp_nomenklatura', 'fn', 'fn.entity_id = p.id');
+  $dbr->condition('fn.field_pp_nomenklatura_target_id', PROD_SERVICE_NOM_ID, '<>');
+  $dbr->addField('fn', 'field_pp_nomenklatura_target_id', 'nom_id');
+  if (!empty($params['date_ts'])) {
+    $day_start = gmmktime(0, 0, 0, date('n', $params['date_ts']), date('j', $params['date_ts']), date('Y', $params['date_ts']));
+    $day_end = $day_start + 24*60*60 - 1;
+    $dbr->condition('p.created', [$day_start, $day_end], 'BETWEEN');
+  }
+  if (!empty($params['pu_ids'])) {
+    $dbr->innerJoin('field_data_field_pp_load', 'fl', 'fl.entity_id = p.id');
+    $db_or =db_or();
+    foreach ($params['pu_ids'] as $pu_id) {
+      $db_or->condition('fl.field_pp_load_value', '%' . db_like('"pu_tid":"' . $pu_id . '"') . '%', 'LIKE');
+    }
+    $dbr->condition($db_or);
+  }
+  $dbr->innerJoin('field_data_field_client', 'fc', 'fc.entity_id = fn.field_pp_nomenklatura_target_id');
+  if (!empty($params['company_ids'])) {
+    $dbr->condition('fc.field_client_tid', $params['company_ids'], 'IN');
+  }
+  $dbr->addField('fc', 'field_client_tid', 'company_id');
+  $dbr->distinct();
+  $result = $dbr->execute()->fetchAllAssoc('nom_id');
+
+  return $result;
+}
+
+
+function prod_nomenklatura_get_info($nom_id)
+{
+  $fid = drupal_hash_base64(__FUNCTION__ . $nom_id);
+  $result = &drupal_static($fid);
+
+  if (!isset($result)) {
+    $result = [];
+    if ($nom_id === PROD_SERVICE_NOM_ID) {
+      $result = [
+        'id' => 0,
+        'label' => 'Технические работы',
+        'name' => 'Технические работы',
+        'id_1c' => '',
+        'artikul' => '',
+        'name_d' => '',
+        'artikul_d' => '',
+        'client_id' => 0, // уст.
+        'company_id' => 0,
+      ];
+    } else {
+      $nom_wr = entity_metadata_wrapper('taxonomy_term', $nom_id);
+      if ($nom_wr->value()) {
+        $name = $nom_wr->label();
+        $company_id = $nom_wr->field_client->value() ? $nom_wr->field_client->getIdentifier() : 0;
+        $id_1c = $nom_wr->field_1c_id->value();
+        $artikul = $nom_wr->field_oc_artikul->value();
+        $label = $name . ($artikul && $company_id == COMPANY_TD ? ' (' . $artikul . ')' : '');
+        $name_d = $nom_wr->field_oc_name_davalec->value();
+        $artikul_d = $nom_wr->field_oc_artikul_davalec->value();
+        if ($name_d) {
+          $label = $name_d . ($artikul_d ? ' (' . $artikul_d . ')' : '');
+        }
+
+        $result = [
+          'id' => $nom_id,
+          'label' => $label,
+          'name' => $name,
+          'id_1c' => $id_1c,
+          'artikul' => $artikul,
+          'name_d' => $name_d,
+          'artikul_d' => $artikul_d,
+          'client_id' => $company_id, // уст.
+          'company_id' => $company_id,
+        ];
+      }
+    }
+  }
+
+  return $result ?: false;
+}
+
+function prod_produce_unit_get_by_1c_id($id_1c)
+{
+  if (!$id_1c) return false;
+
+  $vid = taxonomy_vocabulary_machine_name_load('produce_units')->vid;
+  $query = new EntityFieldQuery();
+  $terms = $query
+    ->entityCondition('entity_type', 'taxonomy_term')
+    ->propertyCondition('vid', $vid)
+    ->fieldCondition('field_oc_produce_unit_id', 'value', $id_1c)
+    ->execute();
+  if ($terms) {
+    // если найдено несколько, это ошибка. записать в лог
+    if (count($terms) > 1) {
+      watchdog('import', 'Найдено несколько записей Установок по 1с ID: @id', ['@id' => $id_1c], WATCHDOG_WARNING);
+    }
+    $term = reset($terms['taxonomy_term']);
+  } else {
+    $term = (object)array(
+      'vid' => $vid,
+      'name' => 'Установка с 1с ID "' . $id_1c . '" отсутствует в справочнике. Создана пустая запись.',
+      'field_oc_produce_unit_id' => ['und' => [0 => ['value' => $id_1c]]],
+    );
+    taxonomy_term_save($term);
+  }
+  $entities = entity_load('taxonomy_term', [$term->tid]);
+
+  return empty($entities) ? false: reset($entities);
+}
+
+/**
+ * Вернуть список Загрузки по заданной Номенклатуре (может быть на нескольких установках) или заданной Установке на месяц
+ * В отличие от данных, хранящихся в field_pp_load Записи плана, функция возвращает актуальное состояние с техобслуживанием
+ * и занятостью производством прочих продуктов.
+ * @param $produce_unit_id - вывести только для заданной установки
+ * @param $nomenklatura_id - вывести только для номенклатуры (мб несколько установок)
+ * @return array
+ *       $produce_units = [
+          '%putid' => [
+            'info' => '%pu_info',
+            'nom' => [
+              '%nom_id' => '%nom_info',
+            ],
+            'load' => [
+              '%date' => [
+                'output' => '%output',
+                'is_own' => '%is_own',
+                'is_current' => '%is_current',
+                'nom_id' => '%nom_id',
+              ],
+            ],
+          ],
+        ];
+ */
+function prod_produce_unit_get_load($month_start, $produce_unit_id = null, $plan_rec_id = null)
+{
+  $produce_units = [];
+
+  // id Номенклатуры, которая будет подсвечена, как текущая
+  $nom_current_id = 0;
+
+  if ($plan_rec_id) {
+    $plan_rec_info = prod_plan_record_get_info($plan_rec_id);
+    $nom_current_id = $plan_rec_info['nom']['id'];
+  }
+
+  // определить, какие установкам выводить
+  $pu_ids = [];
+  if ($produce_unit_id) {
+    // по заданной Установке
+    $pu_ids = [$produce_unit_id];
+  } elseif (!empty($plan_rec_info['load'])) {
+    // по заданной Записи плана
+    $pu_ids = array_keys($plan_rec_info['load']);
+  }
+
+  // определить Номенклатуру, выпускаемую на Установках
+  if ($nom_list = prod_nomenklatura_get_list_by_plan(['month_ts' => $month_start, 'pu_ids' => $pu_ids])) {
+    $produce_units_client = [];
+    $produce_units_labels = [];
+    foreach ($nom_list as $nom_id => $nom_item) {
+      $plan_rec = prod_plan_record_get_last($month_start, $nom_item->nom_id);
+      $plan_rec_info = prod_plan_record_get_info($plan_rec->id);
+      if ($plan_rec_info['load']) {
+        foreach ($plan_rec_info['load'] as $puid => $pu) {
+          // собираем только по заданным
+          if (empty($pu_ids) || in_array($puid, $pu_ids)) {
+            if (!isset($produce_units[$puid])) {
+              $produce_units[$puid] = [
+                'info' => prod_produce_unit_get_info($puid),
+                'nom' => [],
+                'load' => [],
+                'amount' => 0,
+              ];
+              $produce_units_labels[$produce_units[$puid]['info']['name']] = $puid;
+            };
+            if (!isset($produce_units[$puid]['nom'][$nom_id])) {
+              $produce_units[$puid]['nom'][$nom_id] = [
+                'info' => prod_nomenklatura_get_info($nom_id),
+                'load' => [],
+              ];
+            }
+
+            foreach ($pu['pu_load'] as $day_start => $output) {
+              // Заполняем информацию о Номенклатуре по дням,
+              // если информации ещё нет
+              // или если есть, но задана текущая номенклатура и информация не по ней.
+              // (в принципе это ошибка - наложение производства двух наименований в один день, но при возникновении выводить клиенту его Номенклатуру, а не параллельную)
+              if (!isset($produce_units[$puid]['load'][$day_start])
+                  || ($nom_current_id && $produce_units[$puid]['load'][$day_start]['nom_id'] != $nom_current_id)) {
+                $produce_units[$puid]['load'][$day_start] = [
+                  'output' => $output,
+                  'is_own' => 0,
+                  'is_current' => 0,
+                  'nom_id' => $nom_id,
+                ];
+              }
+              // для менеджера показываем данные обо всей Номенклатуре
+              // а для клиента только о Номенклатуре его компаний
+              if (user_has_role(ROLE_MANAGER_PRODUCTION)
+                  || in_array($nom_item->company_id, array_keys(ext_user_get_companies_by_user()))) {
+                $produce_units[$puid]['load'][$day_start]['is_own'] = 1;
+                $produce_units[$puid]['load'][$day_start]['is_current'] = $produce_units[$puid]['load'][$day_start]['nom_id'] == $nom_current_id ? 1 : 0;
+                if (!$nom_current_id || $nom_current_id == $nom_id) $produce_units[$puid]['amount'] += $output;
+                $produce_units[$puid]['nom']['list'][$nom_id] = $produce_units[$puid]['nom'][$nom_id]['info']['label'];
+                // для последующей фильтрации по клиенту
+                $produce_units_client[$puid] = 1;
+              }
+            }
+          }
+        }
+      }
+    }
+
+    // определить сервисную Запись плана
+    if ($plan_rec_service = prod_plan_record_get_last($month_start, PROD_SERVICE_NOM_ID)) {
+      $plan_rec_service_info = prod_plan_record_get_info($plan_rec_service->id);
+      foreach ($plan_rec_service_info['load'] as $puid => $pu) {
+        if (isset($produce_units[$puid])) {
+          if (!isset($produce_units[$puid]['nom'][PROD_SERVICE_NOM_ID])) {
+            $produce_units[$puid]['nom'][PROD_SERVICE_NOM_ID]['info'] = prod_nomenklatura_get_info(PROD_SERVICE_NOM_ID);
+          }
+          foreach ($pu['pu_load'] as $date => $output) {
+            if (!isset($produce_units[$puid]['load'][$date])) {
+              $produce_units[$puid]['load'][$date] = [
+                'output' => 0,
+                'is_own' => 0,
+                'is_current' => 0,
+                'nom_id' => PROD_SERVICE_NOM_ID,
+              ];
+            }
+          }
+        }
+      }
+    }
+
+    // исключить установки, где нет клиентской Номенклатуры
+    $pu_copy = $produce_units;
+    foreach ($pu_copy as $pu_tid => $item) {
+      if (empty($produce_units_client[$pu_tid])) unset($produce_units[$pu_tid]);
+    }
+
+    // отсортировать по названию установки
+    ksort($produce_units_labels);
+    $produce_units_copy = $produce_units;
+    $produce_units = [];
+    foreach ($produce_units_labels as $puid) {
+      if (isset($produce_units_copy[$puid])) {
+        $produce_units[$puid] = $produce_units_copy[$puid];
+      }
+    }
+  }
+
+  // определить классы и общий объём
+  foreach ($produce_units as $pu_tid => &$pu_item_ptr) {
+    foreach ($pu_item_ptr['load'] as $day_start => &$load_ptr) {
+      $classes = [];
+      if ($load_ptr['is_own'] && !$load_ptr['is_current']) {
+        $classes[] = 'company-loaded';
+      } else {
+        if (!$load_ptr['is_current']) $classes[] = 'loaded';
+      }
+      if ($load_ptr['is_current']) $classes[] = 'selected';
+      $load_ptr['classes'] = $classes;
+    }
+  }
+
+  return $produce_units;
+}
+
+function prod_produce_unit_get_info($pu_id)
+{
+  $fid = drupal_hash_base64(__FUNCTION__ . $pu_id);
+  $result = &drupal_static($fid);
+
+  if (!isset($result)) {
+    $result = [];
+    $pu_wr = entity_metadata_wrapper('taxonomy_term', $pu_id);
+    if ($pu_wr->value()) {
+
+      $result = [
+        'id' => $pu_id,
+        'name' => $pu_wr->label(),
+        'label' => str_replace('уст.', '', $pu_wr->label()),
+        'id_1c' => $pu_wr->field_oc_produce_unit_id->value(),
+        'status' => $pu_wr->field_status->value(),
+      ];
+    }
+  }
+
+  return $result ?? false;
+}
+
+function prod_company_get_by_1c_id($id_1c)
+{
+  if (!$id_1c) return false;
+
+  $vid = taxonomy_vocabulary_machine_name_load('clients')->vid;
+  $query = new EntityFieldQuery();
+  $terms = $query
+    ->entityCondition('entity_type', 'taxonomy_term')
+    ->propertyCondition('vid', $vid)
+    ->fieldCondition('field_1c_id', 'value', $id_1c)
+    ->execute();
+  if ($terms) {
+    // если найдено несколько, это ошибка. записать в лог
+    if (count($terms) > 1) {
+      watchdog('import', 'Найдено несколько записей Компании по 1с ID: @id', ['@id' => $id_1c], WATCHDOG_WARNING);
+    }
+    $term = reset($terms['taxonomy_term']);
+  } else {
+    $term = (object)array(
+      'vid' => $vid,
+      'name' => 'Компания с 1c ID "' . $id_1c . '" отсутствует в справочнике. Создана пустая запись.',
+      'field_1c_id' => ['und' => [0 => ['value' => $id_1c]]],
+    );
+    taxonomy_term_save($term);
+  }
+  $entities = entity_load('taxonomy_term', [$term->tid]);
+
+  return empty($entities) ? false: reset($entities);
+}
+
+function prod_reason_get_by_1c_id($id_1c)
+{
+  if (!$id_1c) return false;
+
+  $vid = taxonomy_vocabulary_machine_name_load('reasons')->vid;
+  $query = new EntityFieldQuery();
+  $terms = $query
+    ->entityCondition('entity_type', 'taxonomy_term')
+    ->propertyCondition('vid', $vid)
+    ->fieldCondition('field_reason_oc_id', 'value', $id_1c)
+    ->execute();
+  if ($terms) {
+    // если найдено несколько, это ошибка. записать в лог
+    if (count($terms) > 1) {
+      watchdog('import', 'Найдено несколько записей Причин по 1с ID: @id', ['@id' => $id_1c], WATCHDOG_WARNING);
+    }
+    $term = reset($terms['taxonomy_term']);
+  } else {
+    $term = (object)array(
+      'vid' => $vid,
+      'name' => 'Причина с 1c ID "' . $id_1c . '" отсутствует в справочнике. Создана пустая запись.',
+      'field_reason_oc_id' => ['und' => [0 => ['value' => $id_1c]]],
+    );
+    taxonomy_term_save($term);
+  }
+  $entities = entity_load('taxonomy_term', [$term->tid]);
+
+  return empty($entities) ? false: reset($entities);
+}
+
+/**
+ * Вернуть Изменение из справочника по 1с id, а если нет - создать.
+
+ * @param $id_1c
+ * @return false|mixed
+ */
+function prod_change_get_by_1c_id($id_1c)
+{
+  if (!$id_1c) return false;
+
+  $vid = taxonomy_vocabulary_machine_name_load('changes')->vid;
+  $query = new EntityFieldQuery();
+  $terms = $query
+    ->entityCondition('entity_type', 'taxonomy_term')
+    ->propertyCondition('vid', $vid)
+    ->fieldCondition('field_1c_id  ', 'value', $id_1c)
+    ->execute();
+  if ($terms) {
+    // если найдено несколько, это ошибка. записать в лог
+    if (count($terms) > 1) {
+      watchdog('import', 'Найдено несколько записей Изменений по 1с ID: @id', ['@id' => $id_1c], WATCHDOG_WARNING);
+    }
+    $term = reset($terms['taxonomy_term']);
+  } else {
+    $term = (object)array(
+      'vid' => $vid,
+      'name' => 'Изменение с 1c ID "' . $id_1c . '" отсутствует в справочнике. Создана пустая запись.',
+      'field_1c_id' => ['und' => [0 => ['value' => $id_1c]]],
+    );
+    taxonomy_term_save($term);
+  }
+  $entities = entity_load('taxonomy_term', [$term->tid]);
+
+  return empty($entities) ? false: reset($entities);
+}
+
+
+/**
+ * Преобразовать существующую Заявку (старый формат) в Сообщение (новый формат)
+ */
+function prod_query_migrate($qid)
+{
+  if (!$qid) return;
+
+  $success = false;
+  $error = '';
+
+  $transaction = db_transaction();
+  try {
+    $query_wr = entity_metadata_wrapper('query', $qid);
+
+    $plan_rec = null;
+    $changes = $params = [];
+    $reason = 0;
+    $no_message = false;   // на предварительный план сообщение не добавлять
+
+    // определить автора
+    $author = PROD_MESSAGE_AUTHOR_PROD;
+    if ($query_wr->uid->raw()) {
+      $author = PROD_MESSAGE_AUTHOR_CLIENT;
+    }
+
+    // загрузка установок
+    $load = drupal_json_decode($query_wr->field_load_json->value());
+
+    // чтобы определить, какое изменение произошло, сравним с прошлым изменением плана
+    // (не меняем на определение по последнему Сообщению, так как здесь идёт сравнение загрузки установок ['load'])
+    if ($plan_rec_prev = prod_plan_record_get_last($query_wr->field_month->value(), $query_wr->field_nomenklatura->getIdentifier())) {
+      $plan_rec_prev_info = prod_plan_record_get_info($plan_rec_prev->id);
+    }
+
+    // Запись плана создаётся только для Производства
+    if ($author == PROD_MESSAGE_AUTHOR_PROD) {
+      // если импортируется Сервисная запись, проверить,
+      // если есть в базе более поздняя, то не импортируем
+      if ($query_wr->field_nomenklatura->getIdentifier() == PROD_SERVICE_NOM_ID) {
+        if ($prod_rec_service = prod_plan_record_get_last($query_wr->field_month->value(), PROD_SERVICE_NOM_ID)) {
+          $prod_rec_service_info = prod_plan_record_get_info($prod_rec_service->id);
+          if ($query_wr->created->value() > $prod_rec_service_info['created']) {
+            return;
+          } else {
+            prod_plan_record_delete($query_wr->field_month->value(), PROD_SERVICE_NOM_ID);
+          }
+        }
+      }
+
+      // определить новый тип Записи плана
+      $query_type = $query_wr->field_query_type->value();
+      $query_client_status = $query_wr->field_query_status_client->value();
+      $type = PROD_PLAN_TYPE_PRED;
+      if ($query_type == 'plan') {
+        if ($query_client_status == 'approved') {
+          $type = PROD_PLAN_TYPE_APPR;
+        } else {
+          // если это предварительный план, то сообщения не добавляются
+          $no_message = true;
+        }
+      }
+      if ($query_type == 'correction') {
+        $type = PROD_PLAN_TYPE_OPER;
+      }
+
+      // удалить все предыдущие Записи плана по Номенклатуре, кроме утверждённого плана
+      prod_plan_record_delete($query_wr->field_month->value(), $query_wr->field_nomenklatura->getIdentifier());
+
+      // создать Запись плана
+      $plan_rec = prod_plan_record_create([
+        'import_time_ts' => $query_wr->created->value(),
+        'month_ts' => $query_wr->field_month->value(),
+        'nom_id' => $query_wr->field_nomenklatura->getIdentifier(),
+        'type' => $type,
+        'load' => $load,
+      ]);
+      $plan_rec_info = prod_plan_record_get_info($plan_rec->id);
+
+      // определить Изменение, если это не Сервисная запись
+      if ($type == PROD_PLAN_TYPE_APPR) {
+                                $changes[] = PROD_CHANGE_APPROVE;                 // утверждение плана
+      }
+      elseif (!$no_message && $query_wr->field_nomenklatura->getIdentifier() != PROD_SERVICE_NOM_ID) {
+        $reason = $query_wr->field_query_reason->getIdentifier();
+        $volume_from = $date_from = null;
+        // если нет Записей плана, то это Включение в план или Отказ
+        if (empty($plan_rec_prev_info)) {
+          if ($load)            $changes[] = PROD_CHANGE_ADD_TO_PLAN;             // внесение в план
+          // если по инициативе клиента
+          elseif($reason == 553) {
+                                $changes[] = PROD_CHANGE_CANCEL;                  // отмена
+          } else                $changes[] = PROD_CHANGE_DENY;                    // отказ
+        }
+        // если есть Записи плана
+        else {
+          $volume_from = $plan_rec_prev_info['volume'];
+          $date_from = $plan_rec_prev_info['date'];
+          if ($plan_rec_info['volume'] == 0) {
+                                $changes[] = PROD_CHANGE_CANCEL;                  // отмена выпуска
+          } else {
+            if ($plan_rec_prev_info['volume'] == 0) {
+                                $changes[] = PROD_CHANGE_ADD_TO_PLAN;             // внесение в план
+            }
+            else {
+              if ($plan_rec_prev_info['volume'] != $plan_rec_info['volume']) {
+                                $changes[] = PROD_CHANGE_VOLUME;                  // изменение объёма
+              }
+              // вместе с изменением Объёма может быть изменение Даты или Графика
+              if ($plan_rec_info['date']) {
+                if ($plan_rec_prev_info['date'] != $plan_rec_info['date']) {
+                                $changes[] = PROD_CHANGE_DATE;                   // изменение даты начала
+                }
+                elseif ($plan_rec_prev_info['load'] != $load) {
+                                $changes[] = PROD_CHANGE_SCHEDULE;               // изменение графика выпуска
+                }
+              }
+            }
+          }
+        }
+
+        $params['volume'] = ['from' => $volume_from, 'to' => $plan_rec_info['volume']];
+        $params['date'] = ['from' => $date_from, 'to' => $plan_rec_info['date']];
+      }
+    }
+    // для запроса Клиента попробовать определить Изменения
+    else {
+      $volume_from = $date_from = null;
+      $volume_to = $query_wr->field_qty->value();
+      $date_to = $query_wr->field_query_period->value->value();
+      if (empty($plan_rec_prev_info)) {
+                                $changes[] = PROD_CHANGE_ADD_TO_PLAN;
+      } else {
+        $volume_from = $plan_rec_prev_info['volume'];
+        $date_from = $plan_rec_prev_info['date'];
+        if ($volume_to == 0) {
+                                $changes[] = PROD_CHANGE_CANCEL;
+        }
+        else {
+          if ($volume_from == 0) {
+                                $changes[] = PROD_CHANGE_ADD_TO_PLAN;
+          }
+          else {
+            if ($volume_to != $volume_from) {
+                                $changes[] = PROD_CHANGE_VOLUME;
+            }
+            if (!empty($date_to) && $date_to != $date_from)
+                                $changes[] = PROD_CHANGE_DATE;
+          }
+        }
+      }
+      $params['volume'] = ['from' => $volume_from, 'to' => $volume_to];
+      $params['date'] = ['from' => $date_from, 'to' => $date_to];
+    }
+
+    // при необходимости создать системное сообщение для клиента
+    // причины:  - отсутствие сырья
+    //           - отсутствие материалов
+    if (in_array($reason, [551, 552])) {
+      prod_message_create([
+        'created' => $query_wr->created->value()-1,
+        'month_ts' => $query_wr->field_month->value(),
+        'nom_id' => $query_wr->field_nomenklatura->getIdentifier(),
+        'comment' => $query_wr->field_query_reason->name->value(),
+        'author' => PROD_MESSAGE_AUTHOR_SYS_CLIENT,
+        'warning' => PROD_WARNING_RED,
+      ]);
+    }
+
+    // создать сообщение
+    if (!$no_message) {
+      prod_message_create([
+        'created' => $query_wr->created->value(),
+        'month_ts' => $query_wr->field_month->value(),
+        'nom_id' => $query_wr->field_nomenklatura->getIdentifier(),
+        'comment' => $query_wr->field_comment->value(),
+        'id_1c' => $query_wr->field_oc_id->value(),
+        'changes' => $changes,
+        'reason' => $reason,
+        'author' => $author,
+        'params' => $params,
+      ]);
+    }
+
+    $success = true;
+  } catch (Exception $e) {
+    $transaction->rollback();
+    watchdog_exception('migration', $e);
+  }
+
+  if ($success) {
+    watchdog('migration', 'Удачно (%id)', ['%id' => $query_wr->getIdentifier()]);
+  } else {
+    watchdog('migration', 'Неудачно. %error (%id)', ['%id' => $query_wr->getIdentifier(), '%error' => $error], WATCHDOG_ERROR);
+  }
+}
+
+

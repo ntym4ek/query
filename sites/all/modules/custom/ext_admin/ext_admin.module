@@ -99,24 +99,65 @@ function ext_admin_process_migration()
 {
   $queue = DrupalQueue::get('ext_admin_queue_worker');
   $queue->deleteQueue();
+  return;
 
-  $counter = 0;
+  // список для очереди за год
+  $year = 2024;
+  for ($i=1; $i<=12; $i++) {
+    $counter = 0;
+    $month_start = gmmktime(0, 0, 0, $i, 1, $year);
 
-  // список компаний-юзеров
-  $dbr = db_select('users', 'u');
-  $dbr->addField('u', 'uid');
-  if ($users = $dbr->execute()->fetchCol()) {
-    foreach ($users as $uid) {
-      $account = user_load($uid);
-      if ($account)
-      {
-        $queue->createItem($uid);
-        $counter++;
+    prod_message_delete_all($month_start);
+    prod_plan_record_delete_all($month_start);
+
+    // получить список номенклатуры
+    $dbr = db_select('field_data_field_nomenklatura', 'fn');
+    $dbr->condition('fn.entity_type', 'query');
+    $dbr->innerJoin('field_data_field_month', 'fm', 'fm.entity_id = fn.entity_id');
+    $dbr->condition('fm.field_month_value', $month_start);
+    $dbr->distinct();
+    $dbr->addField('fn', 'field_nomenklatura_target_id', 'tid');
+    $nom_ids = $dbr->execute()->fetchCol();
+
+    if ($nom_ids) {
+      foreach ($nom_ids as $nom_id) {
+        if (false && !in_array($nom_id, [
+            3047,
+  //        3977,
+  //        200,
+  //        362
+        ])) continue; // пока только для одной номенклатуры
+
+        $efQuery = new EntityFieldQuery();
+        $efQueries = $efQuery
+          ->entityCondition('entity_type', 'query')
+          ->fieldCondition('field_month', 'value', $month_start)
+          ->fieldCondition('field_nomenklatura', 'target_id', $nom_id)
+          ->propertyOrderBy('id')
+          ->execute();
+
+        // сервисную заявку только последнюю
+        $efQuery = new EntityFieldQuery();
+        $efService = $efQuery
+          ->entityCondition('entity_type', 'query')
+          ->fieldCondition('field_month', 'value', $month_start)
+          ->fieldCondition('field_query_type', 'value', 'service')
+          ->propertyOrderBy('id', 'DESC')
+          ->range(0, 1)
+          ->execute();
+
+        if ($efQueries) {
+          foreach ($efQueries['query'] as $query) {
+            $queue->createItem($query->id);
+            $counter++;
+          }
+          if ($efService) $queue->createItem(reset($efService['query'])->id);
+        }
       }
+
+      drupal_set_message('Месяц: ' . $i . '. Элементов: ' . $counter);
     }
   }
-
-  drupal_set_message('Done ' . $counter . ' iterations');
 
   $dest = strpos($_SERVER["HTTP_REFERER"], $GLOBALS["base_url"]) !== false ? $_SERVER["HTTP_REFERER"] : false;
   if ($dest) {
@@ -124,24 +165,8 @@ function ext_admin_process_migration()
   }
 }
 
-function ext_admin_queue_callback($uid)
+function ext_admin_queue_callback($qid)
 {
-  if (!$uid) return;
-
-  $success = false;
-  $error = '';
-
-  $client_wr = entity_metadata_wrapper('user', $uid);
-
-  if ($company_tid = $client_wr->field_user_company->raw()) {
-    $client_wr->field_user_companies[] = $company_tid;
-    $client_wr->save();
-    $success = true;
-  }
-
-  if ($success) {
-    watchdog('transfer', 'Удачно (%id)', ['%id' => $client_wr->label()]);
-  } else {
-    watchdog('transfer', 'Недачно. %error (%id)', ['%id' => $client_wr->label(), '%error' => $error], WATCHDOG_ERROR);
-  }
+  prod_query_migrate($qid);
 }
+

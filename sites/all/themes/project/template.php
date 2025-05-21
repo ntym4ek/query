@@ -10,7 +10,7 @@
 /**
  * Implements hook_theme().
  */
-function prod_theme()
+function project_theme()
 {
   return [
     'nomenklatura_teaser' => [
@@ -28,6 +28,9 @@ function prod_theme()
     'field_custom' => [
       'variables' => ['title' => null, 'content' => null],
     ],
+    'table_header_mod' => [
+      'variables' => [],
+    ],
   ];
 }
 
@@ -36,7 +39,7 @@ function prod_theme()
  * @param $vars
  * @return string
  */
-function prod_message($vars)
+function project_message($vars)
 {
 
   if (in_array($vars['message_info']['author'], [PROD_MESSAGE_AUTHOR_CLIENT, PROD_MESSAGE_AUTHOR_SYS_CLIENT])) {
@@ -55,11 +58,8 @@ function prod_message($vars)
     $files = implode(', ', $arr);
   }
 
-
-  $message_class = '';
-
-  $output  = "<div class=\"message-row$row_class\">";
-  $output .=   "<div class=\"message$message_class\">";
+  $output  = '<div class="message-row' . $row_class . '">';
+  $output .=   '<div class="message">';
   if ($vars['message_info']['changes']['formatted'])
     $output .=     '<div class="m-change">' . $vars['message_info']['changes']['formatted'] . '</div>';
   if ($vars['message_info']['reason'])
@@ -75,15 +75,7 @@ function prod_message($vars)
     $output .=     '<div class="m-warning"></div>';
   }
 
-
-  if (true) {
-    // вывести отладочную информацию
-    $output .=      '<div class="m-date"><a title="id: ' . $vars['message_info']['id'] . '">' .
-                      date('d.m.Y H:i', $vars['message_info']['created']) .
-                    '</a></div>';
-  } else {
-    $output .=     '<div class="m-date">' . date('d.m.Y H:i', $vars['message_info']['created']) . '</div>';
-  }
+  $output .=     '<div class="m-date"' . (variable_get('ext_admin_debug', 0) ? ' title="id: ' . $vars['message_info']['id'] . ' - id_1c: ' . $vars['message_info']['id_1c'] . '"' : '') . '>' . date('d.m.Y H:i', $vars['message_info']['created']) . '</div>';
   $output .=   '</div>';
   $output .= '</div>';
 
@@ -95,7 +87,7 @@ function prod_message($vars)
  * @param $vars
  * @return string
  */
-function prod_message_mail($vars)
+function project_message_mail($vars)
 {
   // подготовить файлы
   $files = '';
@@ -109,7 +101,7 @@ function prod_message_mail($vars)
 
   $changes_formatted = str_replace('class="nowrap"', 'style="white-space: nowrap;"', $vars['message_info']['changes']['formatted']);
 
-  $output  =   '<div class="message" style="font-size: 14px;color: #333333;flex: 0 1 auto;background: #eee;border-radius: 5px;max-width: 500px; min-width: 150px;padding: 1.5rem 2rem 0.7rem; margin-bottom: 1rem;">';
+  $output  =   '<div class="message" style="font-size: 14px;color: #333333;flex: 0 1 auto;background: #eee;border-radius: 5px;max-width: 500px; min-width: 150px;padding: 1.5rem 2rem 0.7rem; margin-bottom: 0.5rem;">';
   if ($changes_formatted)
     $output .=     '<div class="m-change" style="font-size: 18px;font-weight: 600;">' . $changes_formatted . '</div>';
   if ($vars['message_info']['reason'])
@@ -128,15 +120,16 @@ function prod_message_mail($vars)
   return $output;
 }
 
-function prod_nomenklatura_teaser($vars)
+function project_nomenklatura_teaser($vars)
 {
   $output = '';
   $title        = theme('field_custom', ['title' => 'Номенклатура', 'content' => $vars['nom_info']['label']]);
-  $volume       = $vars['plan_rec_info'] ? theme('field_custom', ['title' => 'Объём выпуска, л(кг)', 'content' => helper_number_format($vars['plan_rec_info']['volume'], 2, ' ')]) : '';
+  $volume       = $vars['plan_rec_info'] ? theme('field_custom', ['title' => 'Объём выпуска', 'content' => helper_number_format($vars['plan_rec_info']['volume'], 2, ' ')]) : '';
   $date         = !empty($vars['plan_rec_info']['date']) ? theme('field_custom', ['title' => 'Начало выпуска', 'content' => date('d.m.Y', $vars['plan_rec_info']['date'])]) : '';
-
   $date_change  = theme('field_custom', ['title' => 'Дата изменения', 'content' => date('d.m.Y', $vars['message_info']['created'])]);
-  $change       = theme('field_custom', ['title' => 'Последнее изменение', 'content' => $vars['message_info']['changes']['formatted']]);
+
+  $change_text = $vars['message_info']['changes']['formatted'] ?: 'Комментарий';
+  $change       = theme('field_custom', ['title' => 'Последнее изменение', 'content' => $change_text]);
 
   $url          = '/production/nomenklatura/' . $vars['nom_info']['id'] . '/' . $vars['month_start'];
   $button       = '<a class="btn btn-default btn-xs" href="' . $url . '">подробнее</a>';
@@ -155,13 +148,12 @@ function prod_nomenklatura_teaser($vars)
     if ($vars['warning'] == PROD_WARNING_RED) $class_warn = ' warn-red';
   }
 
-
-  $output .='<a href="">';
+//  $output .='<a href="">';
   $output .=  '<div class="nom-item' . $class_warn . '">';
   $output .=    '<div class="n-header">';
   $output .=      '<div class="n-title"><a href="' . $url . '">' . $title . '</a></div>';
-  $output .=      '<div class="n-volume">' . $volume . ' </div>';
   $output .=      '<div class="n-date">' . $date . '</div>';
+  $output .=      '<div class="n-volume">' . $volume . ' </div>';
   $output .=    '</div>';
   $output .=    '<div class="n-footer">';
   $output .=      '<div class="n-date-change">' . $date_change . '</div>';
@@ -169,7 +161,7 @@ function prod_nomenklatura_teaser($vars)
   $output .=      '<div class="n-actions">' . $button . ' </div>';
   $output .=    '</div>';
   $output .=  '</div>';
-  $output .='</a>';
+//  $output .='</a>';
 
   return $output;
 }
@@ -177,7 +169,7 @@ function prod_nomenklatura_teaser($vars)
 /**
  * Функция темизации производственной Установки
  */
-function prod_produce_unit($vars)
+function project_produce_unit($vars)
 {
   $month_start = $vars['month_start'];
   $produce_unit = $vars['produce_unit'];
@@ -193,27 +185,25 @@ function prod_produce_unit($vars)
       $classes = $load[$day_start]['classes'];
       $nam_name = $produce_unit['nom'][$load[$day_start]['nom_id']]['info']['label'];
 
-      $title = str_replace('"', '', $nam_name) . ($load[$day_start]['output'] ? '<br />' . $load[$day_start]['output'] : '');
-      $tooltip = ' data-toggle="tooltip" data-placement="top" data-html="true" title="' . $title . '"';
+      $title = str_replace('"', '', $nam_name) . ($load[$day_start]['output'] ? ' - ' . $load[$day_start]['output'] : '');
+      $tooltip = ' title="' . $title . '"';
       $tooltip = empty($load[$day_start]['is_own']) ? '' : $tooltip;
     }
     $days .= '<span class="c-box ' . implode(' ', $classes) . '"' . $tooltip . '>' . $i . '</span>';
   }
 
-  $month_label = empty($vars['show_month']) ? 'Даты' : helper_month_label_ru(date('n', $month_start)) . ' ' . date('Y', $month_start);
-
   $output =
     '<div class="produce-unit" data-putid="' . $produce_unit['info']['id'] . '">' .
       '<div class="produce-unit-name">' .
-        '<label class="label" for="edit-name">Установка</label>' .
-        '<h3>' . $pu_name . '</h3>' .
-      '</div>' .
-      '<div class="produce-unit-dates">' .
-        '<label class="label">' . $month_label . '</label>' .
-        '<div class="form-checkboxes">' .
+      '<label class="label" for="edit-name">Установка</label>' .
+      '<h3' . (variable_get('ext_admin_debug', 0) ? ' title="' . $produce_unit["info"]["id_1c"] . '"' : '') . '>' . $pu_name . '</h3>' .
+    '</div>' .
+    '<div class="produce-unit-dates">' .
+      '<label class="label">Даты</label>' .
+      '<div class="pu-dates">' .
         $days .
-        '</div>' .
-      '</div>';
+      '</div>' .
+    '</div>';
 
   if (!empty($vars['show_amount'])) {
     $output .=
@@ -234,7 +224,10 @@ function prod_produce_unit($vars)
   return $output;
 }
 
-function prod_field_custom($vars)
+/**
+ * Функция темизации простого поля с заголовком
+ */
+function project_field_custom($vars)
 {
   $output =   '<div class="field field-' . drupal_strtolower(transliteration_get($vars['title'])) . '">';
   $output .=    '<label class="field-label">' . $vars['title'] . '</label>';
@@ -244,7 +237,7 @@ function prod_field_custom($vars)
   return $output;
 }
 
-function prod_preprocess_mimemail_message(&$vars)
+function project_preprocess_mimemail_message(&$vars)
 {
   // переменные для шаблона письма
   // logo для писем (берём лого из текущей темы, если существует)
@@ -256,4 +249,154 @@ function prod_preprocess_mimemail_message(&$vars)
   $vars['sign']   = empty($vars['message']['params']['context']['sign']) ? t('Postal robot') . ' ' . t($site_name) : $vars['message']['params']['context']['sign'];
   // notice - текст сообщения о том, что письмо сформировано автоматически
   $vars['notice'] = !isset($vars['message']['params']['context']['auto']) ? t('This message was generated automatically and does not require a response') : $vars['message'] ['params']['context']['auto'];
+}
+
+/**
+ * Модификация theme_table с многоуровневым заголовком
+ * todo проверить необходимость $colgroups, $sticky и $empty
+ */
+function project_table(array $variables)
+{
+  $header = $variables['header'];
+  $rows = $variables['rows'];
+  $attributes = $variables['attributes'];
+  $caption = $variables['caption'] ?? '';
+//  $colgroups = $variables['colgroups'];
+//  $sticky = $variables['sticky'];
+  $empty = $variables['empty'];
+  $header_multiple = $variables['header_multiple'] ?? '';
+
+  // Add sticky headers, if applicable.
+  if (count($header)) {
+    drupal_add_js('misc/tableheader.js');
+    // Add 'sticky-enabled' class to the table to identify it for JS.
+    // This is needed to target tables constructed by this function.
+    $attributes['class'][] = 'sticky-enabled';
+  }
+
+  $output = '<table'. drupal_attributes($attributes) .">\n";
+
+  if (isset($caption)) {
+    $output .= '<caption>'. $caption ."</caption>\n";
+  }
+
+  // Multiple header rows
+  if (!$header_multiple == NULL) {
+    $thead_set = '';
+    // Format the table header:
+    if (count($header)) {
+      foreach($header as $number => $head) {
+        $ts = tablesort_init($head);
+        // HTML requires that the thead tag has tr tags in it followed by tbody
+        // tags. Using if clause to check and see if we have any rows and whether
+        // the thead tag is already open
+        if(count($rows) && $thead_set != 1){
+          $output .= ' <thead><tr>';
+          $thead_set = 1;
+        }else{
+          $output .= ' <tr>';
+        }
+        //$output .= (count($rows) ? ' <thead><tr>' : ' <tr>');
+        foreach ($head as $cell) {
+          $cell = tablesort_header($cell, $head, $ts);
+          $output .= _theme_table_cell($cell, TRUE);
+        }
+      }
+      // Using ternary operator to close the tags based on whether or not there are rows
+      $output .= (count($rows) ? " </tr></thead>\n" : "</tr>\n");
+    }
+    else {
+      $ts = array();
+    }
+    // One header row
+  } else {
+    // Format the table header:
+    if (count($header)) {
+      $ts = tablesort_init($header);
+      // HTML requires that the thead tag has tr tags in it followed by tbody
+      // tags. Using ternary operator to check and see if we have any rows.
+      $output .= (count($rows) ? ' <thead><tr>' : ' <tr>');
+      foreach ($header as $cell) {
+        $cell = tablesort_header($cell, $header, $ts);
+        $output .= _theme_table_cell($cell, TRUE);
+      }
+      // Using ternary operator to close the tags based on whether or not there are rows
+      $output .= (count($rows) ? " </tr></thead>\n" : "</tr>\n");
+    }
+    else {
+      $ts = array();
+    }
+  }
+
+
+  // Add the 'empty' row message if available.
+  if (empty($rows) && $empty) {
+    $header_count = 0;
+    if (!empty($header)) {
+      $header = $header_multiple ? array_shift($header) : $header;
+      foreach ($header as $header_cell) {
+        if (is_array($header_cell)) {
+          $header_count += isset($header_cell['colspan']) ?
+            $header_cell['colspan'] : 1;
+        }
+        else {
+          $header_count++;
+        }
+      }
+    }
+    $rows[] = array(
+      array(
+        'data' => $empty,
+        'colspan' => $header_count,
+        'class' => array(
+          'empty',
+          'message'
+        ),
+      ),
+    );
+  }
+
+  // Format the table rows:
+  if (count($rows)) {
+    $output .= "<tbody>\n";
+    $flip = array('even' => 'odd', 'odd' => 'even');
+    $class = 'even';
+    foreach ($rows as $number => $row) {
+      $attributes = array();
+
+      // Check if we're dealing with a simple or complex row
+      if (isset($row['data'])) {
+        foreach ($row as $key => $value) {
+          if ($key == 'data') {
+            $cells = $value;
+          }
+          else {
+            $attributes[$key] = $value;
+          }
+        }
+      }
+      else {
+        $cells = $row;
+      }
+
+      if (!empty($cells)) {
+        // Add odd/even class.
+        $class = $flip[$class];
+        $attributes['class'][] = $class;
+
+        // Build row.
+        $output .= ' <tr' . drupal_attributes($attributes) . '>';
+        $i = 0;
+        foreach ($cells as $cell) {
+          $cell = tablesort_cell($cell, $header, $ts, $i++);
+          $output .= _theme_table_cell($cell);
+        }
+        $output .= " </tr>\n";
+      }
+    }
+    $output .= "</tbody>\n";
+  }
+
+  $output .= "</table>\n";
+  return $output;
 }
