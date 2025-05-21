@@ -517,3 +517,42 @@ function prod_message_import($array)
 
   return true;
 }
+
+/**
+ * Импортировать записи приёма фактически произведённой продукции на склад
+ */
+function prod_fact_import($array)
+{
+  if (is_array($array) && !empty($array['load'])) {
+    $day_start = helper_datetime_to_timestamp($array['date']);
+
+    // подготовить массив с Фактом для внесения в базу
+    // на случай дублирования номенклатур просуммировать производимое количество
+    $fact = [];
+    foreach ($array['load'] as $item) {
+      if (!empty($item['nom_id'])) {
+        $nom = prod_nomenklatura_get_by_1c_params($item['nom_id']);
+
+        if (isset($fact[$nom->tid])) $fact[$nom->tid] += $item['volume'];
+        else $fact[$nom->tid] = $item['volume'];
+      }
+    }
+
+    prod_fact_record_delete_all($day_start);
+
+    // добавление Плана на месяц
+    foreach ($fact as $nom_id => $volume) {
+      prod_fact_record_create([
+        'day_ts' => $day_start,
+        'nom_id' => $nom_id,
+        'volume' => $volume,
+      ]);
+    }
+
+    watchdog('import', 'Импорт принятой на склад продукции выполнен.', [], WATCHDOG_INFO);
+    return $fact;
+  } else {
+    watchdog('import', 'Импорт принятой на склад продукции НЕ выполнен', [], WATCHDOG_ERROR);
+    return false;
+  }
+}

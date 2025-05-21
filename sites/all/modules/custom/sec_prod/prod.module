@@ -138,6 +138,8 @@ function prod_import_processors_alter(&$processors)
 
     $processors['last_queue'][]  =  ['mask' => '/^prod_message_import_oper_.*\.json/', 'include' => $path . 'prod.import.inc', 'func' => 'prod_message_import', 'archive' => 'prod'];
     $processors['last_queue'][]  =  ['mask' => '/^prod_plan_oper.*\.json/',            'include' => $path . 'prod.import.inc', 'func' => 'prod_plan_import', 'archive' => 'prod'];
+
+    $processors['last_queue'][]  =  ['mask' => '/^prod_fact.*\.json/',                 'include' => $path . 'prod.import.inc', 'func' => 'prod_fact_import', 'archive' => 'prod'];
   }
 }
 
@@ -617,6 +619,63 @@ function prod_plan_has_approved($month_start)
   }
 
   return $result;
+}
+
+/**
+ * Создать запись фактически принятой на склад продукции
+ */
+function prod_fact_record_create($fields)
+{
+  $transaction = db_transaction();
+  try {
+    $fact_rec = entity_create('fact', [
+      'type' => 'fact',
+    ]);
+    entity_save('fact', $fact_rec);
+
+    $fact_rec_wr = entity_metadata_wrapper('fact', $fact_rec);
+    $fact_rec_wr->field_f_date = $fields['day_ts'];
+    $fact_rec_wr->field_f_nomenklatura = $fields['nom_id'];
+    $fact_rec_wr->field_f_volume = $fields['volume'];
+    $fact_rec_wr->save();
+  } catch (Exception $e) {
+    $transaction->rollback();
+    watchdog_exception('migration', $e);
+  }
+
+  return $fact_rec ?? false;
+}
+
+/**
+ * Удалить записи фактически произведенной продукции
+ * @param $day_ts
+ */
+function prod_fact_record_delete_all($day_ts = null)
+{
+  $efquery = new EntityFieldQuery();
+  $efquery->entityCondition('entity_type', 'fact');
+  if ($day_ts) {
+    $efquery->fieldCondition('field_f_date', 'value', $day_ts);
+  }
+  $result = $efquery->execute();
+  if ($result) {
+    entity_delete_multiple('fact', array_keys($result['fact']));
+  }
+}
+
+/**
+ * Вернуть факт по номенклатуре за день
+ */
+function prod_fact_get_by_nom($nom_id, $day_start)
+{
+  $dbr = db_select('field_data_field_f_volume', 'fv');
+  $dbr->innerJoin('field_data_field_f_nomenklatura', 'fn', 'fn.entity_id = fv.entity_id');
+  $dbr->condition('fn.field_f_nomenklatura_target_id', $nom_id);
+  $dbr->innerJoin('field_data_field_f_date', 'fd', 'fd.entity_id = fv.entity_id');
+  $dbr->condition('fd.field_f_date_value', $day_start);
+  $dbr->addExpression('SUM(fv.field_f_volume_value)');
+
+  return (float)$dbr->execute()->fetchField();
 }
 
 /**
@@ -1339,5 +1398,3 @@ function prod_query_migrate($qid)
     watchdog('migration', 'Неудачно. %error (%id)', ['%id' => $query_wr->getIdentifier(), '%error' => $error], WATCHDOG_ERROR);
   }
 }
-
-

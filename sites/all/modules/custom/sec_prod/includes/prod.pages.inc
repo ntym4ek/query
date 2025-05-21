@@ -1074,21 +1074,28 @@ function prod_year_plan_fact_table($company_id, $season, $month)
       if (!empty($plan_rec_info['load'])) {
         foreach ($plan_rec_info['load'] as $pu_id => $pu_item) {
           foreach ($pu_item['pu_load'] as $day_start => $output) {
-            if (!isset($nom_arr[$nom_id]['days'][$day_start])) $nom_arr[$nom_id]['days'][$day_start] = ['plan' => 0, 'fact' => 0];
+            $day_fact = 0;
+            if (!isset($nom_arr[$nom_id]['days'][$day_start])) {
+              $day_fact = prod_fact_get_by_nom($nom_id, $day_start);
+              $nom_arr[$nom_id]['days'][$day_start] = ['plan' => 0, 'fact' => $day_fact];
+            }
             $nom_arr[$nom_id]['days'][$day_start]['plan'] += $output;
 
             if (!isset($days_arr[$day_start]['plan'])) $days_arr[$day_start] = ['plan' => 0, 'fact' => 0];
             $days_arr[$day_start]['plan'] += $output;
+            $days_arr[$day_start]['fact'] += $day_fact;
             $days_arr[0]['plan'] += $output;
 
             $week_num = date('W', $day_start);
             if (!isset($weeks_arr[$week_num])) $weeks_arr[$week_num] = ['plan' => 0, 'fact' => 0];
             $weeks_arr[$week_num]['plan'] += $output;
+            $weeks_arr[$week_num]['fact'] += $day_fact;
 
             if (!isset($nom_arr[$nom_id]['months'][$month])) {
-              $nom_arr[$nom_id]['months'][$month] = ['month_start' => $month_start, 'volume' => 0];
+              $nom_arr[$nom_id]['months'][$month] = ['month_start' => $month_start, 'plan' => 0, 'fact' => 0];
             }
-            $nom_arr[$nom_id]['months'][$month]['volume'] += $output;
+            $nom_arr[$nom_id]['months'][$month]['plan'] += $output;
+            $nom_arr[$nom_id]['months'][$month]['fact'] += $day_fact;
           }
         }
       }
@@ -1127,35 +1134,34 @@ function prod_year_plan_fact_table($company_id, $season, $month)
   foreach ($sort_arr as $nom_id) {
     $row_p = [['data' => $nom_arr[$nom_id]['label'], 'class' => 'fixed fixed-col-1', 'rowspan' => 2]];
     $row_f = [];
-      $month_start = gmmktime(0, 0, 0, $month, 1, $year);
-      $month_plan = isset($nom_arr[$nom_id]['months'][$month]) ? helper_number_format($nom_arr[$nom_id]['months'][$month]['volume'], 1, ' ') : '';
-      $month_fact = 0;
-      $month_days = date('t', $month_start);
+    $month_start = gmmktime(0, 0, 0, $month, 1, $year);
+    $month_plan = isset($nom_arr[$nom_id]['months'][$month]) ? helper_number_format($nom_arr[$nom_id]['months'][$month]['plan'], 1, ' ') : '';
+    $month_fact = isset($nom_arr[$nom_id]['months'][$month]) ? helper_number_format($nom_arr[$nom_id]['months'][$month]['fact'], 1, ' ') : '';
+    $month_days = date('t', $month_start);
 
-      // добавляем колонку Месяца
-      $row_p[] = ['data' => $month_plan, 'align' => 'right', 'class' => 'fixed fixed-col-2 fixed-last'];
-      $row_f[] = ['data' => $month_fact, 'align' => 'right', 'class' => 'fixed fixed-col-2 fixed-last'];
+    // добавляем колонку Месяца
+    $row_p[] = ['data' => $month_plan, 'align' => 'right', 'class' => 'fixed fixed-col-2 fixed-last'];
+    $row_f[] = ['data' => $month_fact, 'align' => 'right', 'class' => 'fixed fixed-col-2 fixed-last'];
 
-      // проходим по дням месяца
-      $week_num = -1;
-      for ($d = 1; $d <= $month_days; $d++) {
-        $day_start = gmmktime(0, 0, 0, $month, $d, date('Y', $month_start));
+    // проходим по дням месяца
+    $week_num = -1;
+    for ($d = 1; $d <= $month_days; $d++) {
+      $day_start = gmmktime(0, 0, 0, $month, $d, date('Y', $month_start));
 
-        $week_start = false;
-        if (date('W', $day_start) != $week_num) {
-          $week_num = date('W', $day_start);
-          $week_start = true;
-        }
-
-        $day_volume_p = $nom_arr[$nom_id]['days'][$day_start]['plan'] ?? 0;
-        $day_plan = $day_volume_p ? helper_number_format($day_volume_p, 1, ' ') : '';
-        $row_p[] = ['data' => $day_plan, 'align' => 'right', 'class' => [($week_start ? 'week-start' : '')]];
-
-        $day_volume_f = $nom_arr[$nom_id]['days'][$day_start]['fact'] ?? 0;
-        $day_fact = $day_volume_f ? helper_number_format($day_volume_f, 1, ' ') : '';
-        $row_f[] = ['data' => $day_fact, 'align' => 'right', 'class' => [($week_start ? 'week-start' : '')]];
+      $week_start = false;
+      if (date('W', $day_start) != $week_num) {
+        $week_num = date('W', $day_start);
+        $week_start = true;
       }
-//    }
+
+      $day_volume_p = $nom_arr[$nom_id]['days'][$day_start]['plan'] ?? 0;
+      $day_plan = $day_volume_p ? helper_number_format($day_volume_p, 1, ' ') : '';
+      $row_p[] = ['data' => $day_plan, 'align' => 'right', 'class' => [($week_start ? 'week-start' : '')]];
+
+      $day_volume_f = $nom_arr[$nom_id]['days'][$day_start]['fact'] ?? 0;
+      $day_fact = $day_volume_f ? helper_number_format($day_volume_f, 1, ' ') : '';
+      $row_f[] = ['data' => $day_fact, 'align' => 'right', 'class' => [($week_start ? 'week-start' : '')]];
+    }
     $rows[] = $row_p;
     $rows[] = $row_f;
   }
