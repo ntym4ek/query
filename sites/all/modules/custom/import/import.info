@@ -1,4 +1,0 @@
-name = Data Import
-description = Модуль импорта данных из разных источников
-core = 7.x
-package = Custom

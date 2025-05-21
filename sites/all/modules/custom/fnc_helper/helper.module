@@ -1,5 +1,12 @@
 <?php
 
+const MONTHS = [ 1 => 'Январь' , 'Февраль' , 'Март' , 'Апрель' , 'Май' , 'Июнь' , 'Июль' , 'Август' , 'Сентябрь' , 'Октябрь' , 'Ноябрь' , 'Декабрь' ];
+
+/**
+ * Вернуть название месяца на русском в именительном или родительном падеже
+ * @param $month_index
+ * @param $roditelniy
+ */
 function helper_month_label_ru($month_index, $roditelniy = false)
 {
   $months = $roditelniy ? explode('|', 'января|февраля|марта|апреля|мая|июня|июля|августа|сентября|октября|ноября|декабря') : explode('|', 'Январь|Февраль|Март|Апрель|Май|Июнь|Июль|Август|Сентябрь|Октябрь|Ноябрь|Декабрь');
@@ -47,4 +54,24 @@ function helper_datetime_to_timestamp($datetime)
   }
 
   return $timestamp;
+}
+
+/**
+ * Вернуть timestamp начала заданного дня
+ * @param $timestamp
+ * @return false|int - unix timastamp
+ */
+function helper_get_day_start_from_timestamp($timestamp = REQUEST_TIME)
+{
+  return gmmktime(0, 0, 0, date('n', $timestamp), date('j', $timestamp) , date('Y', $timestamp));
+}
+
+/**
+ * Вернуть timestamp начала месяца
+ * @param $timestamp
+ * @return false|int - unix timastamp
+ */
+function helper_get_month_start_from_timestamp($timestamp = REQUEST_TIME)
+{
+  return gmmktime(0, 0, 0, date('n', $timestamp), 1 , date('Y', $timestamp));
 }
