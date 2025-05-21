@@ -75,7 +75,7 @@ function mailer_mail($key, &$message, $params)
 
   switch($key) {
 
-    case 'client_send_imported_message_mail':
+    case 'client_imported_message_mail':
       $message_info = prod_message_get_info($params['message_id']);
       $nom_info = prod_nomenklatura_get_info($message_info['nom']['id']);
       $product_url = url('/production/nomenklatura/' . $message_info['nom']['id'] . '/' . $message_info['month'], ['absolute' => true]);
@@ -86,7 +86,7 @@ function mailer_mail($key, &$message, $params)
               theme('message_mail', ['message_info' => $message_info]) .
               '<p style="color:#999999;font-size:12px;margin:0 0 1rem;">Перейти на <a href="' . $product_url . '" target="_blank">страницу продукта</a></p>'.
               '<div style="margin: 3rem 0;">' .
-                'Настроить рассылку уведомлений можно в <a href="' . $settings_url . '">Личном кабинете</a>.'.
+                'Настроить рассылку уведомлений можно в <a href="' . $settings_url . '">Кабинете</a>.'.
               '</div>';
 
       $message['subject'] = 'Новое сообщение на сайте "KCCC GROUP. Производство"';
@@ -94,13 +94,13 @@ function mailer_mail($key, &$message, $params)
 
       break;
 
-    case 'client_send_daily_mail':
+    case 'client_daily_mail':
       $settings_url = url('/user/' . $params['uid'], ['absolute' => true]);
       $body = '<div>' .
                 '<p>В плане производства за предыдущие сутки зарегистрированы следующие изменения:</p>' .
                 $params['text'] .
                 '<div style="margin: 3rem 0;">' .
-                  'Настроить рассылку уведомлений можно в <a href="' . $settings_url . '">Личном кабинете</a>.'.
+                  'Настроить рассылку уведомлений можно в <a href="' . $settings_url . '">Кабинете</a>.'.
                 '</div>' .
               '</div>';
 
@@ -108,6 +108,25 @@ function mailer_mail($key, &$message, $params)
       $message['body'][] = $body;
 
       break;
+
+    case 'manager_corrections_request_mail':
+        $message_info = prod_message_get_info($params['message_id']);
+        $nom_info = prod_nomenklatura_get_info($message_info['nom']['id']);
+        $product_url = url('/production/nomenklatura/' . $message_info['nom']['id'] . '/' . $message_info['month'], ['absolute' => true]);
+        $settings_url = url('/user/' . $params['uid'], ['absolute' => true]);
+
+        $body = '<p style="margin-bottom:3rem;">На сайт поступило сообщение от клиента:</p>' .
+                '<h2 style="margin:2rem 0 0;">' . $nom_info['label'] . '</h2>' .
+                theme('message_mail', ['message_info' => $message_info]) .
+                '<p style="color:#999999;font-size:12px;margin:0 0 1rem;">Перейти на <a href="' . $product_url . '" target="_blank">страницу продукта</a></p>'.
+                '<div style="margin: 3rem 0;">' .
+                  'Настроить рассылку уведомлений можно в <a href="' . $settings_url . '">Кабинете</a>.'.
+                '</div>';
+
+        $message['subject'] = 'Новое сообщение от клиента на сайте "KCCC GROUP. Производство"';
+        $message['body'][] = $body;
+
+        break;
 
 
 
@@ -332,7 +351,7 @@ function mailer_prod_mail_daily()
  */
 function mailer_send_daily_mails($params)
 {
-  drupal_mail('mailer', 'client_send_daily_mail', $params['email'], 'ru', $params);
+  drupal_mail('mailer', 'client_daily_mail', $params['email'], 'ru', $params);
 }
 
 /**

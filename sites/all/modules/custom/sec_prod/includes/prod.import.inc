@@ -508,7 +508,7 @@ function prod_message_import($array)
         if (!isset($user_settings['mail']['nom'][$nom_id]) || $user_settings['mail']['nom'][$nom_id]) {
           // отправлять сразу? (по умолчанию раз в сутки)
           if (isset($user_settings['mail']['frequency']) && $user_settings['mail']['frequency'] == 1) {
-            drupal_mail('mailer', 'client_send_imported_message_mail', $user->mail, user_preferred_language($user), ['message_id' => $message->id, 'uid' => $user->uid]);
+            drupal_mail('mailer', 'client_imported_message_mail', $user->mail, user_preferred_language($user), ['message_id' => $message->id, 'uid' => $user->uid]);
           }
         }
       }

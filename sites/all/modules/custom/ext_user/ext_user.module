@@ -300,6 +300,9 @@ function ext_user_preprocess_user_profile(&$vars)
     if (user_has_role(CLIENT_RID, $account)) {
       $vars['client_settings_form'] = drupal_get_form('ext_user_client_settings_form', $account);
     }
+    if (user_has_role(MANAGER_RID, $account)) {
+      $vars['manager_settings_form'] = drupal_get_form('ext_user_manager_settings_form', $account);
+    }
   }
 }
 
@@ -396,8 +399,46 @@ function ext_user_client_settings_form($form, $form_state, $account = null)
 
   return $form;
 }
-
 function ext_user_client_settings_form_ajax($form, $form_state)
+{
+  return $form;
+}
+
+function ext_user_manager_settings_form($form, $form_state, $account = null)
+{
+  $account = $account ?? $GLOBALS['user']->uid;
+  $user_settings = variable_get('user_settings_' . $account->uid);
+
+  if (isset($form_state['triggering_element'])) {
+    $value = $form_state["triggering_element"]["#value"];
+    if (strpos($form_state['triggering_element']['#name'], 'mails') === 0) {
+      $user_settings['mail']['base'] = $value;
+    }
+
+    variable_set('user_settings_' . $account->uid, $user_settings);
+  }
+
+
+  $form['#prefix'] = '<div id="manager-settings-form-wrapper">';
+  $form['#suffix'] = '</div>';
+  $form['mails'] = [
+    '#title' => 'Рассылка',
+    '#description' => 'уведомления об запросах клиентов',
+    '#type' => 'checkboxes',
+    '#name' => 'mails',
+    '#options' => [
+      1 => 'включить',
+    ],
+    '#default_value' => [1 => $user_settings['mail']['base'] ?? 1],
+    '#ajax' => [
+      'wrapper' => 'manager-settings-form-wrapper',
+      'callback' => 'ext_user_manager_settings_form_ajax',
+    ],
+  ];
+
+  return $form;
+}
+function ext_user_manager_settings_form_ajax($form, $form_state)
 {
   return $form;
 }
@@ -459,4 +500,29 @@ function ext_user_get_user_info($user = null)
   }
 
   return $result;
+}
+
+function ext_user_managers_get_to_notify()
+{
+  $users = [];
+
+  $dbr = db_select('users', 'u');
+  $dbr->condition('u.status', 1);
+  $dbr->innerJoin('users_roles', 'ur', 'ur.uid = u.uid');
+  $dbr->condition('ur.rid', MANAGER_RID);
+  $dbr->addField('u', 'uid');
+
+  if ($result = $dbr->execute()->fetchCol()) {
+    $list = user_load_multiple($result);
+    foreach ($list as $key => $item) {
+      // в зависимости от настроек
+      $user_settings = variable_get('user_settings_' . $item->uid);
+      // включена ли рассылка (по умолчанию Вкл)
+      if (!isset($user_settings['mail']['base']) || $user_settings['mail']['base']) {
+        $users[$key] = $item;
+      }
+    }
+  }
+
+  return $users ?? false;
 }

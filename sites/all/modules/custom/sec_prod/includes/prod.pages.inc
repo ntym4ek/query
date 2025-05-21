@@ -724,6 +724,12 @@ function prod_message_add_form_submit($form, &$form_state)
     prod_message_export($message->id);
   }
 
+  if ($managers = ext_user_managers_get_to_notify()) {
+    foreach ($managers as $manager) {
+      drupal_mail('mailer', 'manager_corrections_request_mail', $manager->mail, user_preferred_language($manager), ['message_id' => $message->id, 'uid' => $manager->uid]);
+    }
+  }
+
   // редирект на страницу Номенклатуры из ajax формы
   $url_redirect = '/production/nomenklatura/' . $form_state['values']['nom'] . '/' . $month_start;
   ctools_include('ajax');

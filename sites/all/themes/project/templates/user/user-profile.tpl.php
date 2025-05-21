@@ -37,5 +37,12 @@
     </div>
     <?php endif; ?>
 
+    <?php if (!empty($manager_settings_form)): ?>
+    <div class="profile-settings">
+      <h4>Настройки почтовой рассылки</h4>
+      <?php print drupal_render($manager_settings_form); ?>
+    </div>
+    <?php endif; ?>
+
   </div>
 </div>
