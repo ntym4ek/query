@@ -868,11 +868,16 @@ function prod_nomenklatura_get_info($nom_id)
         $company_id = $nom_wr->field_client->value() ? $nom_wr->field_client->getIdentifier() : 0;
         $id_1c = $nom_wr->field_1c_id->value();
         $artikul = $nom_wr->field_oc_artikul->value();
-        $label = $name . ($artikul && $company_id == COMPANY_TD ? ' (' . $artikul . ')' : '');
-        $name_d = $nom_wr->field_oc_name_davalec->value();
+        $label = $name;
         $artikul_d = $nom_wr->field_oc_artikul_davalec->value();
-        if ($name_d) {
+        $name_d = $nom_wr->field_oc_name_davalec->value();
+
+        if ($company_id == COMPANY_TD && $artikul) {
+          $label .= ' (' . $artikul . ')';
+        } elseif ($name_d) {
           $label = $name_d . ($artikul_d ? ' (' . $artikul_d . ')' : '');
+        } elseif ($artikul_d) {
+          $label .= ' (' . $artikul_d . ')';
         }
 
         $result = [
