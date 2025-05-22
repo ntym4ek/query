@@ -942,15 +942,18 @@ function prod_year_plan_fact_form($form, $form_state)
 {
   // дефолтные значения из сессии или текущие
   $company_default  = ext_user_get_session_setting('page_year_plan_fact_company') ?? '';
+  $nom_default      = ext_user_get_session_setting('page_year_plan_fact_nom') ?? '';
   $year_default     = ext_user_get_session_setting('page_year_plan_fact_year') ?? (date('n') < 9 ? date('Y')-1 : date('Y'));
   $month_default    = ext_user_get_session_setting('page_year_plan_fact_month') ??(date('m'));
 
   $company        = $form_state["values"]['company'] ?? $company_default;
+  $nom            = $form_state["values"]['nom']   ?? $nom_default;
   $year           = $form_state["values"]['year']  ?? $year_default;
   $month          = $form_state["values"]['month'] ?? $month_default;
 
   // если значение задано пользователем, сохранить в сессии
   if (!empty($form_state["values"]["company"])) ext_user_store_session_setting('page_year_plan_fact_company', $form_state["values"]["company"]);
+  if (!empty($form_state["values"]["nom"]))     ext_user_store_session_setting('page_year_plan_fact_nom', $form_state["values"]["nom"]);
   if (!empty($form_state["values"]["year"]))    ext_user_store_session_setting('page_year_plan_fact_year', $form_state["values"]["year"]);
   if (!empty($form_state["values"]["month"]))   ext_user_store_session_setting('page_year_plan_fact_month', $form_state["values"]["month"]);
 
@@ -1019,7 +1022,11 @@ function prod_year_plan_fact_form($form, $form_state)
     '#title' => 'Номенклатура',
     '#type' => 'select',
     '#options' => $options_n,
-    '#default_value' => $nomenklatura_id ?? array_key_first($options_n),
+    '#default_value' => $nom ?? array_key_first($options_n),
+    '#ajax' => [
+      'callback' => 'prod_year_plan_fact_form_callback',
+      'wrapper' => 'year-plan-fact-form-wrapper',
+    ],
     '#prefix' => '<div class="col-xs-12 col-md-6 col-lg-4">',
     '#suffix' => '</div>',
   ];
@@ -1060,7 +1067,7 @@ function prod_year_plan_fact_form($form, $form_state)
   ];
 
   $form['table'] = [
-    '#markup' => prod_year_plan_fact_table($company, $year, $month),
+    '#markup' => prod_year_plan_fact_table($company, $nom, $year, $month),
   ];
 
 
@@ -1070,7 +1077,7 @@ function prod_year_plan_fact_form_callback($form, $form_state)
 {
   return $form;
 }
-function prod_year_plan_fact_table($company_id, $season, $month)
+function prod_year_plan_fact_table($company_id, $nom_id, $season, $month)
 {
   // собрать последние Записи плана по Номенклатуре и Установкам за 12 месяцев по дням начиная с сентября
   $sort_arr = [];
@@ -1081,7 +1088,11 @@ function prod_year_plan_fact_table($company_id, $season, $month)
   $year = $month < 9 ? $season+1 : $season;
   $month_start = gmmktime(0, 0, 0, $month, 1, $year);
   // получить список номенклатуры
-  $nom_list = prod_nomenklatura_get_list_by_plan(['company_ids' => $company_id ? [$company_id] : [], 'month_ts' => $month_start]);
+  $nom_list = prod_nomenklatura_get_list_by_plan([
+    'company_ids' => $company_id ? [$company_id] : [],
+    'nom_ids' => $nom_id ? [$nom_id] : [],
+    'month_ts' => $month_start
+    ]);
   foreach ($nom_list as $nom_id => $nom) {
     if ($plan_rec_last = prod_plan_record_get_last($month_start, $nom_id)) {
       $nom_info = prod_nomenklatura_get_info($nom_id);
@@ -1105,31 +1116,21 @@ function prod_year_plan_fact_table($company_id, $season, $month)
       if (!empty($plan_rec_info['load'])) {
         foreach ($plan_rec_info['load'] as $pu_id => $pu_item) {
           foreach ($pu_item['pu_load'] as $day_start => $output) {
-            $day_fact = 0;
-            if (!isset($nom_arr[$nom_id]['days'][$day_start])) {
-              $day_fact = prod_fact_get_by_nom($nom_id, $day_start);
-              $nom_arr[$nom_id]['days'][$day_start] = ['plan' => 0, 'fact' => $day_fact];
-            }
+            if (!isset($nom_arr[$nom_id]['days'][$day_start])) $nom_arr[$nom_id]['days'][$day_start] = ['plan' => 0, 'fact' => 0];
             $nom_arr[$nom_id]['days'][$day_start]['plan'] += $output;
 
             if (!isset($days_arr[$day_start]['plan'])) $days_arr[$day_start] = ['plan' => 0, 'fact' => 0];
             $days_arr[$day_start]['plan'] += $output;
-            $days_arr[$day_start]['fact'] += $day_fact;
             $days_arr[0]['plan'] += $output;
 
             $week_num = date('W', $day_start);
             if (!isset($weeks_arr[$week_num])) $weeks_arr[$week_num] = ['plan' => 0, 'fact' => 0];
             $weeks_arr[$week_num]['plan'] += $output;
-            $weeks_arr[$week_num]['fact'] += $day_fact;
 
-            if (!isset($nom_arr[$nom_id]['months'][$month])) {
-              $nom_arr[$nom_id]['months'][$month] = ['month_start' => $month_start, 'plan' => 0, 'fact' => 0];
-            }
+            if (!isset($nom_arr[$nom_id]['months'][$month])) $nom_arr[$nom_id]['months'][$month] = ['month_start' => $month_start, 'plan' => 0, 'fact' => 0];
             $nom_arr[$nom_id]['months'][$month]['plan'] += $output;
-            $nom_arr[$nom_id]['months'][$month]['fact'] += $day_fact;
 
             $month_arr['plan'] += $output;
-            $month_arr['fact'] += $day_fact;
           }
         }
       }
@@ -1137,6 +1138,29 @@ function prod_year_plan_fact_table($company_id, $season, $month)
   }
 
   $month_days = date('t', $month_start);
+
+  // заполнить факт
+  foreach ($nom_arr as $nom_id => $nom) {
+    for ($d = 1; $d <= $month_days; $d++) {
+      $day_start = gmmktime(0, 0, 0, $month, $d, $year);
+      $day_fact = prod_fact_get_by_nom($nom_id, $day_start);
+      if (!isset($nom_arr[$nom_id]['days'][$day_start])) $nom_arr[$nom_id]['days'][$day_start] = ['plan' => 0, 'fact' => 0];
+      $nom_arr[$nom_id]['days'][$day_start]['fact'] = $day_fact;
+
+      if (!isset($days_arr[$day_start])) $days_arr[$day_start] = ['plan' => 0, 'fact' => 0];
+      $days_arr[$day_start]['fact'] += $day_fact;
+      $days_arr[0]['fact'] += $day_fact;
+
+      $week_num = date('W', $day_start);
+      if (!isset($weeks_arr[$week_num])) $weeks_arr[$week_num] = ['plan' => 0, 'fact' => 0];
+      $weeks_arr[$week_num]['fact'] += $day_fact;
+
+      if (!isset($nom_arr[$nom_id]['months'][$month])) $nom_arr[$nom_id]['months'][$month] = ['month_start' => $month_start, 'plan' => 0, 'fact' => 0];
+      $nom_arr[$nom_id]['months'][$month]['fact'] += $day_fact;
+
+      $month_arr['fact'] += $day_fact;
+    }
+  }
 
   // шапка
   $col = 0;

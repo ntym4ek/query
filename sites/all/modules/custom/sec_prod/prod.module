@@ -804,6 +804,7 @@ function prod_nomenklatura_get_list_by_messages($params)
  * 'date_ts' -  unix timestamp, начало даты, включительно по которую вернуть заявки (по полю created)
  * 'pu_ids' - массив tid установок
  * 'company_ids' - массив tid клиента
+ * 'nom_ids' - массив tid номенклатуры
  *
  * @return array - краткая информация по Ном
  **/
@@ -816,6 +817,9 @@ function prod_nomenklatura_get_list_by_plan($params)
   }
   $dbr->innerJoin('field_data_field_pp_nomenklatura', 'fn', 'fn.entity_id = p.id');
   $dbr->condition('fn.field_pp_nomenklatura_target_id', PROD_SERVICE_NOM_ID, '<>');
+  if (!empty($params['nom_ids'])) {
+    $dbr->condition('fn.field_pp_nomenklatura_target_id', $params['nom_ids'], 'IN');
+  }
   $dbr->addField('fn', 'field_pp_nomenklatura_target_id', 'nom_id');
   if (!empty($params['date_ts'])) {
     $day_start = gmmktime(0, 0, 0, date('n', $params['date_ts']), date('j', $params['date_ts']), date('Y', $params['date_ts']));

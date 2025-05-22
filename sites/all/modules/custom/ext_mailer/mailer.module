@@ -115,7 +115,7 @@ function mailer_mail($key, &$message, $params)
         $product_url = url('/production/nomenklatura/' . $message_info['nom']['id'] . '/' . $message_info['month'], ['absolute' => true]);
         $settings_url = url('/user/' . $params['uid'], ['absolute' => true]);
 
-        $body = '<p style="margin-bottom:3rem;">На сайт поступило сообщение от клиента:</p>' .
+        $body = '<p style="margin-bottom:3rem;">На сайте "KCCC GROUP. Производство" добавлено сообщение от клиента:</p>' .
                 '<h2 style="margin:2rem 0 0;">' . $nom_info['label'] . '</h2>' .
                 theme('message_mail', ['message_info' => $message_info]) .
                 '<p style="color:#999999;font-size:12px;margin:0 0 1rem;">Перейти на <a href="' . $product_url . '" target="_blank">страницу продукта</a></p>'.
