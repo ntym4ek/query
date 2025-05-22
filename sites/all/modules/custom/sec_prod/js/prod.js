@@ -18,10 +18,8 @@
 
       const mouseDownHandler = function (e) {
         pos = {
-          // The current scroll
           left: table.scrollLeft,
           top: table.scrollTop,
-          // Get the current mouse position
           x: e.clientX,
           y: e.clientY,
         };

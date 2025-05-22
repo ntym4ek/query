@@ -58,7 +58,7 @@ Drupal.tableHeader = function (table) {
     // Make sure the element being focused is not hidden beneath the sticky
     // table header. Adjust the scrollTop if it does.
     .bind('drupalDisplaceFocus.drupal-tableheader', function (event) {
-      if (self.stickyVisible && event.clientY < (self.stickyOffsetTop + self.stickyTable.outerHeight()) && event.$target.closest('sticky-header').length === 0) {
+      if (self.stickyVisible && event.clientY < (self.stickyOffsetTop + self.stickyTable.outerHeight()) && event.$target.closest('.sticky-header').length === 0) {
         window.scrollBy(0, -self.stickyTable.outerHeight());
       }
     })

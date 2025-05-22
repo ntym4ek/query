@@ -249,12 +249,15 @@
       white-space: nowrap;
       &:not(:first-child) { text-align: center; }
     }
-    td:not(:first-child) { white-space: nowrap; }
     .fixed-col-1 {
       left: 0;
       min-width: 100px; max-width: 100px; width: 100px;
     }
-    .fixed-col-2 { left: 100px; }
+    .fixed-col-2 {
+      left: 100px;
+      min-width: 50px; max-width: 50px; width: 50px;
+    }
+    .fixed-col-3 { left: 150px; }
     .fixed {
       position:sticky; z-index: 5;
       background-color: #fff;
@@ -287,10 +290,12 @@
   @media #{$pad} {
     table {
       font-size: .7rem;
-      .fixed-col-1 {
-        min-width: 120px; max-width: 120px; width: 120px;
+      .fixed-col-1 { min-width: 120px; max-width: 120px; width: 120px; }
+      .fixed-col-2 {
+        left: 120px;
+        min-width: 115px; max-width: 115px; width: 115px;
       }
-      .fixed-col-2 { left: 120px; }
+      .fixed-col-3 { left: 235px; }
       th,
       td {
         min-width: 65px;
@@ -300,10 +305,9 @@
   @media #{$tablet} {
     table {
       font-size: .7rem;
-      .fixed-col-1 {
-        min-width: 250px; max-width: 250px; width: 250px;
-      }
+      .fixed-col-1 { min-width: 250px; max-width: 250px; width: 250px; }
       .fixed-col-2 { left: 250px; }
+      .fixed-col-3 { left: 365px; }
     }
   }
 }

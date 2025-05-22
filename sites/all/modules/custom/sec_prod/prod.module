@@ -1403,3 +1403,15 @@ function prod_query_migrate($qid)
     watchdog('migration', 'Неудачно. %error (%id)', ['%id' => $query_wr->getIdentifier(), '%error' => $error], WATCHDOG_ERROR);
   }
 }
+
+
+/**
+ * Implements hook_js_alter()
+ */
+function prod_js_alter(&$javascript)
+{
+  // заменить скрипт плавающего заголовка таблицы, чтобы правильно вывести зафиксированные столбцы
+  if (isset($javascript['misc/tableheader.js'])) {
+    $javascript['misc/tableheader.js']['data'] = drupal_get_path('module', 'prod') . '/js/tableheader.js';
+  }
+}
