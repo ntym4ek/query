@@ -943,13 +943,15 @@ function prod_year_plan_fact_form($form, $form_state)
   // дефолтные значения из сессии или текущие
   $company_default  = ext_user_get_session_setting('page_year_plan_fact_company') ?? '';
   $nom_default      = ext_user_get_session_setting('page_year_plan_fact_nom') ?? '';
+  $punit_default    = ext_user_get_session_setting('page_year_plan_fact_punit') ?? '';
   $year_default     = ext_user_get_session_setting('page_year_plan_fact_year') ?? (date('n') < 9 ? date('Y')-1 : date('Y'));
   $month_default    = ext_user_get_session_setting('page_year_plan_fact_month') ??(date('m'));
 
   $company        = $form_state["values"]['company'] ?? $company_default;
-  $nom            = $form_state["values"]['nom']   ?? $nom_default;
-  $year           = $form_state["values"]['year']  ?? $year_default;
-  $month          = $form_state["values"]['month'] ?? $month_default;
+  $nom            = $form_state["values"]['nom']     ?? $nom_default;
+  $punit          = $form_state["values"]['punit']   ?? $punit_default;
+  $year           = $form_state["values"]['year']    ?? $year_default;
+  $month          = $form_state["values"]['month']   ?? $month_default;
 
   // если значение задано пользователем, сохранить в сессии
   if (!empty($form_state["values"]["company"])) ext_user_store_session_setting('page_year_plan_fact_company', $form_state["values"]["company"]);
@@ -969,7 +971,6 @@ function prod_year_plan_fact_form($form, $form_state)
       'js' => [drupal_get_path('module', 'prod') . '/js/prod.js'],
     ],
   ];
-  libraries_load('datatables');
 
   $options_c = [0 => ' - Все - '];
   $query = db_select('taxonomy_term_data', 't');
@@ -1031,6 +1032,33 @@ function prod_year_plan_fact_form($form, $form_state)
     '#suffix' => '</div>',
   ];
 
+  $options_pu = [' - Все - '];
+  $query = db_select('taxonomy_term_data', 't');
+  $query->fields('t', ['tid', 'name']);
+  $query->orderBy('name');
+  $query->condition('t.vid', taxonomy_vocabulary_machine_name_load('produce_units')->vid);
+  $query->innerJoin('field_data_field_status', 'fs', 'fs.entity_id = t.tid');
+  $query->condition('fs.bundle', 'produce_units');
+  $query->condition('fs.field_status_value', 1);
+  if ($result = $query->execute()->fetchAllAssoc('tid')) {
+    foreach ($result as $tid => $term) {
+      $options_pu[$tid] = $term->name;
+    }
+  }
+
+  $form['filters']['punit'] = [
+    '#title' => 'Установка',
+    '#type' => 'select',
+    '#options' => $options_pu,
+    '#default_value' => $punit ?? array_key_first($options_pu),
+    '#ajax' => [
+      'callback' => 'prod_year_plan_fact_form_callback',
+      'wrapper' => 'year-plan-fact-form-wrapper',
+    ],
+    '#prefix' => '<div class="col-xs-4 col-md">',
+    '#suffix' => '</div>',
+  ];
+
   $year_opts = [];
   for($i = -2; $i < 1; $i++) {
     $yr = date('Y') + $i;
@@ -1045,7 +1073,7 @@ function prod_year_plan_fact_form($form, $form_state)
       'callback' => 'prod_year_plan_fact_form_callback',
       'wrapper' => 'year-plan-fact-form-wrapper',
     ],
-    '#prefix' => '<div class="col-xs-6 col-md">',
+    '#prefix' => '<div class="col-xs-4 col-md">',
     '#suffix' => '</div>',
   ];
 
@@ -1062,12 +1090,12 @@ function prod_year_plan_fact_form($form, $form_state)
       'callback' => 'prod_year_plan_fact_form_callback',
       'wrapper' => 'year-plan-fact-form-wrapper',
     ],
-    '#prefix' => '<div class="col-xs-6 col-md">',
+    '#prefix' => '<div class="col-xs-4 col-md">',
     '#suffix' => '</div>',
   ];
 
   $form['table'] = [
-    '#markup' => prod_year_plan_fact_table($company, $nom, $year, $month),
+    '#markup' => prod_year_plan_fact_table($company, $nom, $punit, $year, $month),
   ];
 
 
@@ -1077,7 +1105,7 @@ function prod_year_plan_fact_form_callback($form, $form_state)
 {
   return $form;
 }
-function prod_year_plan_fact_table($company_id, $nom_id, $season, $month)
+function prod_year_plan_fact_table($company_id, $nom_id, $punit_id, $season, $month)
 {
   // собрать последние Записи плана по Номенклатуре и Установкам за 12 месяцев по дням начиная с сентября
   $sort_arr = [];
@@ -1104,6 +1132,7 @@ function prod_year_plan_fact_table($company_id, $nom_id, $season, $month)
       if (!isset($nom_arr[$nom_id])) {
         $nom_arr[$nom_id] = [
           'label' => $nom_info['label'],
+          'punits' => [],
           'company' => $company,
           'days' => [],
           'weeks' => [],
@@ -1116,25 +1145,37 @@ function prod_year_plan_fact_table($company_id, $nom_id, $season, $month)
       if (!empty($plan_rec_info['load'])) {
         foreach ($plan_rec_info['load'] as $pu_id => $pu_item) {
           foreach ($pu_item['pu_load'] as $day_start => $output) {
-            if (!isset($nom_arr[$nom_id]['days'][$day_start])) $nom_arr[$nom_id]['days'][$day_start] = ['plan' => 0, 'fact' => 0];
-            $nom_arr[$nom_id]['days'][$day_start]['plan'] += $output;
+            // фильтр по установкам
+            if (empty($punit_id) || $punit_id == $pu_id) {
+              $nom_arr[$nom_id]['punits'][$pu_id] = str_replace('уст.', '', helper_get_term_info($pu_id)['label']);
 
-            if (!isset($days_arr[$day_start]['plan'])) $days_arr[$day_start] = ['plan' => 0, 'fact' => 0];
-            $days_arr[$day_start]['plan'] += $output;
-            $days_arr[0]['plan'] += $output;
+              if (!isset($nom_arr[$nom_id]['days'][$day_start])) $nom_arr[$nom_id]['days'][$day_start] = ['plan' => 0, 'fact' => 0];
+              $nom_arr[$nom_id]['days'][$day_start]['plan'] += $output;
 
-            $week_num = date('W', $day_start);
-            if (!isset($weeks_arr[$week_num])) $weeks_arr[$week_num] = ['plan' => 0, 'fact' => 0];
-            $weeks_arr[$week_num]['plan'] += $output;
+              if (!isset($days_arr[$day_start]['plan'])) $days_arr[$day_start] = ['plan' => 0, 'fact' => 0];
+              $days_arr[$day_start]['plan'] += $output;
+              $days_arr[0]['plan'] += $output;
 
-            if (!isset($nom_arr[$nom_id]['months'][$month])) $nom_arr[$nom_id]['months'][$month] = ['month_start' => $month_start, 'plan' => 0, 'fact' => 0];
-            $nom_arr[$nom_id]['months'][$month]['plan'] += $output;
+              $week_num = date('W', $day_start);
+              if (!isset($weeks_arr[$week_num])) $weeks_arr[$week_num] = ['plan' => 0, 'fact' => 0];
+              $weeks_arr[$week_num]['plan'] += $output;
 
-            $month_arr['plan'] += $output;
+              if (!isset($nom_arr[$nom_id]['months'][$month])) $nom_arr[$nom_id]['months'][$month] = ['month_start' => $month_start, 'plan' => 0, 'fact' => 0];
+              $nom_arr[$nom_id]['months'][$month]['plan'] += $output;
+
+              $month_arr['plan'] += $output;
+            }
           }
         }
       }
     }
+  }
+
+  // удалить из массива записи с пустым массивом установок
+  $arr = $nom_arr;
+  $nom_arr = [];
+  foreach ($arr as $nom_id => $nom) {
+    if (!empty($nom['punits'])) $nom_arr[$nom_id] = $nom;
   }
 
   $month_days = date('t', $month_start);
@@ -1169,7 +1210,8 @@ function prod_year_plan_fact_table($company_id, $nom_id, $season, $month)
     // добавить фиксированные столбцы
   $header_row_1[$col++] = ['data' => 'Наименование', 'rowspan' => 2, 'class' => 'fixed fixed-col-1'];
   $header_row_1[$col++] = ['data' => 'Компания', 'rowspan' => 2, 'class' => 'fixed fixed-col-2'];
-  $header_row_1[$col++] = ['data' => helper_month_label_ru($month) . '<br>п/ф', 'align' => 'center', 'rowspan' => 2, 'class' => 'fixed fixed-col-3 fixed-last'];
+  $header_row_1[$col++] = ['data' => 'Уст', 'rowspan' => 2, 'class' => 'fixed fixed-col-3'];
+  $header_row_1[$col++] = ['data' => helper_month_label_ru($month) . '<br>п/ф', 'align' => 'center', 'rowspan' => 2, 'class' => 'fixed fixed-col-4 fixed-last'];
   for ($d = 1; $d <= $month_days; $d++) {
     $day_start = gmmktime(0, 0, 0, $month, $d, date('Y', $month_start));
     $week_start = false;
@@ -1191,51 +1233,54 @@ function prod_year_plan_fact_table($company_id, $nom_id, $season, $month)
   ksort($sort_arr);
   $rows = [];
   foreach ($sort_arr as $nom_id) {
-    $row_p = [
-      ['data' => $nom_arr[$nom_id]['label'], 'class' => 'fixed fixed-col-1', 'rowspan' => 2],
-      ['data' => $nom_arr[$nom_id]['company'], 'class' => 'fixed fixed-col-2', 'rowspan' => 2],
-    ];
-    $row_f = [];
-    $month_start = gmmktime(0, 0, 0, $month, 1, $year);
-    $month_plan = isset($nom_arr[$nom_id]['months'][$month]) ? helper_number_format($nom_arr[$nom_id]['months'][$month]['plan'], 1, ' ') : '';
-    $month_fact = isset($nom_arr[$nom_id]['months'][$month]) ? helper_number_format($nom_arr[$nom_id]['months'][$month]['fact'], 1, ' ') : '';
-    $month_days = date('t', $month_start);
+    if (isset($nom_arr[$nom_id])) {
+      $row_p = [
+        ['data' => $nom_arr[$nom_id]['label'], 'class' => 'fixed fixed-col-1', 'rowspan' => 2],
+        ['data' => $nom_arr[$nom_id]['company'], 'class' => 'fixed fixed-col-2', 'rowspan' => 2],
+        ['data' => implode('<br>', array_values($nom_arr[$nom_id]['punits'])), 'align' => 'center', 'class' => 'fixed fixed-col-3', 'rowspan' => 2],
+      ];
+      $row_f = [];
+      $month_start = gmmktime(0, 0, 0, $month, 1, $year);
+      $month_plan = isset($nom_arr[$nom_id]['months'][$month]) ? helper_number_format($nom_arr[$nom_id]['months'][$month]['plan'], 1, ' ') : '';
+      $month_fact = isset($nom_arr[$nom_id]['months'][$month]) ? helper_number_format($nom_arr[$nom_id]['months'][$month]['fact'], 1, ' ') : '';
+      $month_days = date('t', $month_start);
 
-    // добавляем колонку Месяца
-    $row_p[] = ['data' => $month_plan, 'align' => 'right', 'class' => 'fixed fixed-col-3 fixed-last'];
-    $row_f[] = ['data' => $month_fact, 'align' => 'right', 'class' => 'fixed fixed-col-3 fixed-last'];
+      // добавляем колонку Месяца
+      $row_p[] = ['data' => $month_plan, 'align' => 'right', 'class' => 'fixed fixed-col-4 fixed-last'];
+      $row_f[] = ['data' => $month_fact, 'align' => 'right', 'class' => 'fixed fixed-col-4 fixed-last'];
 
-    // проходим по дням месяца
-    $week_num = -1;
-    for ($d = 1; $d <= $month_days; $d++) {
-      $day_start = gmmktime(0, 0, 0, $month, $d, date('Y', $month_start));
+      // проходим по дням месяца
+      $week_num = -1;
+      for ($d = 1; $d <= $month_days; $d++) {
+        $day_start = gmmktime(0, 0, 0, $month, $d, date('Y', $month_start));
 
-      $week_start = false;
-      if (date('W', $day_start) != $week_num) {
-        $week_num = date('W', $day_start);
-        $week_start = true;
+        $week_start = false;
+        if (date('W', $day_start) != $week_num) {
+          $week_num = date('W', $day_start);
+          $week_start = true;
+        }
+
+        $day_volume_p = $nom_arr[$nom_id]['days'][$day_start]['plan'] ?? 0;
+        $day_plan = $day_volume_p ? helper_number_format($day_volume_p, 1, ' ') : '';
+        $row_p[] = ['data' => $day_plan, 'align' => 'right', 'class' => [($week_start ? 'week-start' : '')]];
+
+        $day_volume_f = $nom_arr[$nom_id]['days'][$day_start]['fact'] ?? 0;
+        $day_fact = $day_volume_f ? helper_number_format($day_volume_f, 1, ' ') : '';
+        $row_f[] = ['data' => $day_fact, 'align' => 'right', 'class' => [($week_start ? 'week-start' : '')]];
       }
-
-      $day_volume_p = $nom_arr[$nom_id]['days'][$day_start]['plan'] ?? 0;
-      $day_plan = $day_volume_p ? helper_number_format($day_volume_p, 1, ' ') : '';
-      $row_p[] = ['data' => $day_plan, 'align' => 'right', 'class' => [($week_start ? 'week-start' : '')]];
-
-      $day_volume_f = $nom_arr[$nom_id]['days'][$day_start]['fact'] ?? 0;
-      $day_fact = $day_volume_f ? helper_number_format($day_volume_f, 1, ' ') : '';
-      $row_f[] = ['data' => $day_fact, 'align' => 'right', 'class' => [($week_start ? 'week-start' : '')]];
+      $rows[] = $row_p;
+      $rows[] = $row_f;
     }
-    $rows[] = $row_p;
-    $rows[] = $row_f;
   }
 
   if ($rows) {
     // сформировать строки с итоговыми суммами по дням
-    $totals_day_p = [['data' => 'План', 'class' => ['t-footer fixed fixed-col-1'], 'align' => 'right', 'colspan' => 2]];
-    $totals_day_f = [['data' => 'Факт', 'class' => ['t-footer fixed fixed-col-1'], 'align' => 'right', 'colspan' => 2]];
+    $totals_day_p = [['data' => 'План', 'class' => ['t-footer fixed fixed-col-1'], 'align' => 'right', 'colspan' => 3]];
+    $totals_day_f = [['data' => 'Факт', 'class' => ['t-footer fixed fixed-col-1'], 'align' => 'right', 'colspan' => 3]];
     $total_month_plan = $month_arr['plan'] ? helper_number_format($month_arr['plan'], 1, ' ') : '';
-    $totals_day_p[] = ['data' => $total_month_plan, 'class' => ['t-footer fixed fixed-col-3 fixed-last'], 'align' => 'right'];
+    $totals_day_p[] = ['data' => $total_month_plan, 'class' => ['t-footer fixed fixed-col-4 fixed-last'], 'align' => 'right'];
     $total_month_fact = $month_arr['fact'] ? helper_number_format($month_arr['fact'], 1, ' ') : '';
-    $totals_day_f[] = ['data' => $total_month_fact, 'class' => ['t-footer fixed fixed-col-3 fixed-last'], 'align' => 'right'];
+    $totals_day_f[] = ['data' => $total_month_fact, 'class' => ['t-footer fixed fixed-col-4 fixed-last'], 'align' => 'right'];
     for ($d = 1; $d <= $month_days; $d++) {
       $day_start = gmmktime(0, 0, 0, $month, $d, date('Y', $month_start));
 
@@ -1257,18 +1302,18 @@ function prod_year_plan_fact_table($company_id, $nom_id, $season, $month)
     $rows[] = $totals_day_f;
 
     // сформировать строки с итоговыми суммами по неделям
-    $totals_week_p = [['data' => 'Неделя', 'class' => ['t-footer fixed fixed-col-1'], 'align' => 'right', 'colspan' => 2]];
-    $totals_week_f = [['data' => '', 'class' => ['t-footer fixed fixed-col-1'], 'colspan' => 2]];
-    $totals_week_d = [['data' => 'Разница', 'class' => ['t-footer fixed fixed-col-1'], 'align' => 'right', 'colspan' => 2]];
-    $totals_week_pr = [['data' => 'Выполнение', 'class' => ['t-footer fixed fixed-col-1'], 'align' => 'right', 'colspan' => 2]];
+    $totals_week_p = [['data' => 'Неделя', 'class' => ['t-footer fixed fixed-col-1'], 'align' => 'right', 'colspan' => 3]];
+    $totals_week_f = [['data' => '', 'class' => ['t-footer fixed fixed-col-1'], 'colspan' => 3]];
+    $totals_week_d = [['data' => 'Разница', 'class' => ['t-footer fixed fixed-col-1'], 'align' => 'right', 'colspan' => 3]];
+    $totals_week_pr = [['data' => 'Выполнение', 'class' => ['t-footer fixed fixed-col-1'], 'align' => 'right', 'colspan' => 3]];
 
-    $totals_week_p[] = ['data' => '', 'class' => ['t-footer fixed fixed-col-3 fixed-last']];
-    $totals_week_f[] = ['data' => '', 'class' => ['t-footer fixed fixed-col-3 fixed-last']];
+    $totals_week_p[] = ['data' => '', 'class' => ['t-footer fixed fixed-col-4 fixed-last']];
+    $totals_week_f[] = ['data' => '', 'class' => ['t-footer fixed fixed-col-4 fixed-last']];
 
     $total_month_delta = $month_arr['plan'] ? helper_number_format($month_arr['plan'] - $month_arr['fact'], 1, ' ') : '';
-    $totals_week_d[] = ['data' => $total_month_delta, 'align' => 'right', 'class' => ['t-footer fixed fixed-col-3 fixed-last']];
+    $totals_week_d[] = ['data' => $total_month_delta, 'align' => 'right', 'class' => ['t-footer fixed fixed-col-4 fixed-last']];
     $total_month_progress = $month_arr['plan'] ? helper_number_format($month_arr['fact'] / $month_arr['plan'] * 100, 2, ' ') . '%' : '';
-    $totals_week_pr[] = ['data' => $total_month_progress, 'align' => 'right', 'class' => ['t-footer fixed fixed-col-3 fixed-last']];
+    $totals_week_pr[] = ['data' => $total_month_progress, 'align' => 'right', 'class' => ['t-footer fixed fixed-col-4 fixed-last']];
 
     $week_num = -1;
     for ($d = 1; $d <= $month_days; $d++) {

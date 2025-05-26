@@ -75,3 +75,40 @@ function helper_get_month_start_from_timestamp($timestamp = REQUEST_TIME)
 {
   return gmmktime(0, 0, 0, date('n', $timestamp), 1 , date('Y', $timestamp));
 }
+
+/**
+ * Вернуть массив информации о термине таксономии
+ */
+function helper_get_term_info($term)
+{
+  $term_info = &drupal_static(__FUNCTION__ . serialize($term));
+  if (!isset($term_info)) {
+    $term_info = [];
+    $term_wr = entity_metadata_wrapper('taxonomy_term', $term);
+    if ($term_wr->value()) {
+      $voc = taxonomy_vocabulary_load($term_wr->value()->vid);
+      $term_info = [
+        'id' => $term_wr->getIdentifier(),
+        'label' => $term_wr->label(),
+        'description' => $term_wr->description->value(),
+        'weight' => $term_wr->weight->value(),
+        'voc' => [
+          'id' => $voc->vid,
+          'name' => $voc->machine_name,
+        ],
+        'path' => url('taxonomy/term/' . $term_wr->getIdentifier()),
+      ];
+
+      // todo по списку полей добавить значения в массив
+      if ($fields = field_info_instances('taxonomy_term', $voc->machine_name)) {
+        foreach ($fields as $name => $field) {
+          if (!in_array($name, ['name_field', 'description_field'])) {
+            $term_info[$name] = $term_wr->{$name}->value();
+          }
+        }
+      }
+    }
+  }
+
+  return $term_info;
+}
