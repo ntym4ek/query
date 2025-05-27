@@ -249,6 +249,13 @@
       white-space: nowrap;
       &:not(:first-child) { text-align: center; }
     }
+    tr.even td,
+    .fixed-col-1,
+    .fixed-col-2,
+    .fixed-col-3,
+    th.fixed-col-4,
+    tr:nth-child(2) th { border-bottom-width: 2px; }
+
     .fixed-col-1 {
       left: 0;
       min-width: 100px; max-width: 100px; width: 100px;
