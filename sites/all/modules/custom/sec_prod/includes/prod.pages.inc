@@ -1234,13 +1234,13 @@ function prod_year_plan_fact_table($company_id, $nom_id, $punit_id, $season, $mo
   $rows = [];
   foreach ($sort_arr as $nom_id) {
     if (isset($nom_arr[$nom_id])) {
+      $month_start = gmmktime(0, 0, 0, $month, 1, $year);
       $row_p = [
-        ['data' => $nom_arr[$nom_id]['label'], 'class' => 'fixed fixed-col-1', 'rowspan' => 2],
+        ['data' => '<a href="/production/nomenklatura/' . $nom_id . '/' . $month_start . '">' . $nom_arr[$nom_id]['label'] . '</a>', 'class' => 'fixed fixed-col-1', 'rowspan' => 2],
         ['data' => $nom_arr[$nom_id]['company'], 'class' => 'fixed fixed-col-2', 'rowspan' => 2],
         ['data' => implode('<br>', array_values($nom_arr[$nom_id]['punits'])), 'align' => 'center', 'class' => 'fixed fixed-col-3', 'rowspan' => 2],
       ];
       $row_f = [];
-      $month_start = gmmktime(0, 0, 0, $month, 1, $year);
       $month_plan = isset($nom_arr[$nom_id]['months'][$month]) ? helper_number_format($nom_arr[$nom_id]['months'][$month]['plan'], 1, ' ') : '';
       $month_fact = isset($nom_arr[$nom_id]['months'][$month]) ? helper_number_format($nom_arr[$nom_id]['months'][$month]['fact'], 1, ' ') : '';
       $month_days = date('t', $month_start);
