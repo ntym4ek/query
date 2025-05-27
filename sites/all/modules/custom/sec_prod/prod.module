@@ -497,13 +497,17 @@ function prod_plan_record_create($fields)
  * Вернуть последнюю запись плана по Месяцу и Номенклатуре
  * @param $month_ts
  * @param $nom_id
+ * @param $approved - если нужен только утверждённый план
  */
-function prod_plan_record_get_last($month_ts, $nom_id)
+function prod_plan_record_get_last($month_ts, $nom_id, bool $approved = false)
 {
   $efQuery = new EntityFieldQuery();
   $efQuery->entityCondition('entity_type', 'plan');
   $efQuery->fieldCondition('field_pp_month', 'value', $month_ts);
   $efQuery->fieldCondition('field_pp_nomenklatura', 'target_id', $nom_id);
+  if ($approved) {
+    $efQuery->fieldCondition('field_pp_type', 'value', PROD_PLAN_TYPE_APPR);
+  }
   $efQuery->propertyOrderBy('id', 'DESC');
   $efQuery->range(0, 1);
 

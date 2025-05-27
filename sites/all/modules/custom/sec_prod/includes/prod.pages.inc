@@ -788,8 +788,8 @@ function prod_year_plan_form($form, $form_state)
   $year           = !isset($form_state["values"]['year'])    ? $year_default : $form_state["values"]['year'];
 
   // если значение задано пользователем, сохранить в сессии
-  if (!empty($form_state["values"]["company"])) ext_user_store_session_setting('page_year_plan_company', $form_state["values"]["company"]);
-  if (!empty($form_state["values"]["year"]))    ext_user_store_session_setting('page_year_plan_year', $form_state["values"]["year"]);
+  if (isset($form_state["values"]["company"])) ext_user_store_session_setting('page_year_plan_company', $form_state["values"]["company"]);
+  if (isset($form_state["values"]["year"]))    ext_user_store_session_setting('page_year_plan_year', $form_state["values"]["year"]);
 
 
   $form = [
@@ -954,10 +954,11 @@ function prod_year_plan_fact_form($form, $form_state)
   $month          = $form_state["values"]['month']   ?? $month_default;
 
   // если значение задано пользователем, сохранить в сессии
-  if (!empty($form_state["values"]["company"])) ext_user_store_session_setting('page_year_plan_fact_company', $form_state["values"]["company"]);
-  if (!empty($form_state["values"]["nom"]))     ext_user_store_session_setting('page_year_plan_fact_nom', $form_state["values"]["nom"]);
-  if (!empty($form_state["values"]["year"]))    ext_user_store_session_setting('page_year_plan_fact_year', $form_state["values"]["year"]);
-  if (!empty($form_state["values"]["month"]))   ext_user_store_session_setting('page_year_plan_fact_month', $form_state["values"]["month"]);
+  if (isset($form_state["values"]["company"])) ext_user_store_session_setting('page_year_plan_fact_company', $form_state["values"]["company"]);
+  if (isset($form_state["values"]["nom"]))     ext_user_store_session_setting('page_year_plan_fact_nom', $form_state["values"]["nom"]);
+  if (isset($form_state["values"]["punit"]))   ext_user_store_session_setting('page_year_plan_fact_punit', $form_state["values"]["punit"]);
+  if (isset($form_state["values"]["year"]))    ext_user_store_session_setting('page_year_plan_fact_year', $form_state["values"]["year"]);
+  if (isset($form_state["values"]["month"]))   ext_user_store_session_setting('page_year_plan_fact_month', $form_state["values"]["month"]);
 
 
   $form = [
@@ -1121,8 +1122,9 @@ function prod_year_plan_fact_table($company_id, $nom_id, $punit_id, $season, $mo
     'nom_ids' => $nom_id ? [$nom_id] : [],
     'month_ts' => $month_start
     ]);
+  $has_approved = prod_plan_has_approved($month_start);
   foreach ($nom_list as $nom_id => $nom) {
-    if ($plan_rec_last = prod_plan_record_get_last($month_start, $nom_id)) {
+    if ($plan_rec_last = prod_plan_record_get_last($month_start, $nom_id, $has_approved)) {
       $nom_info = prod_nomenklatura_get_info($nom_id);
       $company = '';
       if ($nom_info['company_id']) {
