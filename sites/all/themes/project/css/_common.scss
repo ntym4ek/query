@@ -1,17 +1,9 @@
 @import "variables"; // чтобы переменные не подсвечивались
 
 html {
-  height: 100%;
-  font-size: 12px;
-  @media #{$smart}    { font-size: 14px; }
   @media #{$pad}      { font-size: 14px; }
   @media #{$tablet}   { font-size: 16px; }
   @media #{$laptop}   { font-size: 16px; }
-}
-
-body {
-  height: 100%;
-  .page-schedule { overflow: hidden; }
 }
 
 .page-header {
