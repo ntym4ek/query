@@ -781,11 +781,11 @@ function prod_nom_page_settings_form_callback($form, $form_state)
 function prod_year_plan_form($form, $form_state)
 {
   // дефолтные значения из сессии или текущие
-  $company_default  = ext_user_get_session_setting('page_year_plan_company') ?? '';
-  $year_default     = ext_user_get_session_setting('page_year_plan_year') ?? (date('n') < 9 ? date('Y')-1 : date('Y'));
+  $company_userset  = ext_user_get_session_setting('page_year_plan_company') ?? null;
+  $year_userset     = ext_user_get_session_setting('page_year_plan_year') ?? (date('n') < 9 ? date('Y')-1 : date('Y'));
 
-  $company        = !isset($form_state["values"]['company']) ? $company_default : $form_state["values"]['company'];
-  $year           = !isset($form_state["values"]['year'])    ? $year_default : $form_state["values"]['year'];
+  $company        = !isset($form_state["values"]['company']) ? $company_userset : $form_state["values"]['company'];
+  $year           = !isset($form_state["values"]['year'])    ? $year_userset : $form_state["values"]['year'];
 
   // если значение задано пользователем, сохранить в сессии
   if (isset($form_state["values"]["company"])) ext_user_store_session_setting('page_year_plan_company', $form_state["values"]["company"]);
@@ -802,8 +802,10 @@ function prod_year_plan_form($form, $form_state)
   ];
 
   $options_c = [];
+  $key = 0;
   if (ext_user_has_roles([ADMIN_RID, MANAGER_RID])) {
     $options_c[0] = ' - Все - ';
+    $key = 1;
   }
   $query = db_select('taxonomy_term_data', 't');
   $query ->fields('t', ['tid', 'name']);
@@ -821,13 +823,13 @@ function prod_year_plan_form($form, $form_state)
     }
   }
 
-  $company = $company && isset($options_c[$company]) ? $company : array_key_first($options_c);
+  $company_default = isset($company) && isset($options_c[$company]) ? $company : array_keys($options_c)[$key];
 
   $form['filters']['company'] = array(
     '#title' => 'Компания',
     '#type' => 'select',
     '#options' => $options_c,
-    '#default_value' => $company,
+    '#default_value' => $company_default,
     '#ajax' => [
       'callback' => 'prod_year_plan_form_callback',
       'wrapper' => 'year-plan-form-wrapper',
@@ -851,7 +853,7 @@ function prod_year_plan_form($form, $form_state)
   ];
 
   $form['table'] = [
-    '#markup' => prod_year_plan_table($company, $year),
+    '#markup' => prod_year_plan_table($company_default, $year),
   ];
 
 
@@ -941,17 +943,17 @@ function prod_year_plan_table($company_id, $year)
 function prod_year_plan_fact_form($form, $form_state)
 {
   // дефолтные значения из сессии или текущие
-  $company_default  = ext_user_get_session_setting('page_year_plan_fact_company') ?? '';
-  $nom_default      = ext_user_get_session_setting('page_year_plan_fact_nom') ?? '';
-  $punit_default    = ext_user_get_session_setting('page_year_plan_fact_punit') ?? '';
-  $year_default     = ext_user_get_session_setting('page_year_plan_fact_year') ?? (date('n') < 9 ? date('Y')-1 : date('Y'));
-  $month_default    = ext_user_get_session_setting('page_year_plan_fact_month') ??(date('m'));
+  $company_userset  = ext_user_get_session_setting('page_year_plan_fact_company') ?? null;
+  $nom_userset      = ext_user_get_session_setting('page_year_plan_fact_nom') ?? '';
+  $punit_userset    = ext_user_get_session_setting('page_year_plan_fact_punit') ?? '';
+  $year_userset     = ext_user_get_session_setting('page_year_plan_fact_year') ?? (date('n') < 9 ? date('Y')-1 : date('Y'));
+  $month_userset    = ext_user_get_session_setting('page_year_plan_fact_month') ??(date('m'));
 
-  $company        = $form_state["values"]['company'] ?? $company_default;
-  $nom            = $form_state["values"]['nom']     ?? $nom_default;
-  $punit          = $form_state["values"]['punit']   ?? $punit_default;
-  $year           = $form_state["values"]['year']    ?? $year_default;
-  $month          = $form_state["values"]['month']   ?? $month_default;
+  $company        = $form_state["values"]['company'] ?? $company_userset;
+  $nom            = $form_state["values"]['nom']     ?? $nom_userset;
+  $punit          = $form_state["values"]['punit']   ?? $punit_userset;
+  $year           = $form_state["values"]['year']    ?? $year_userset;
+  $month          = $form_state["values"]['month']   ?? $month_userset;
 
   // если значение задано пользователем, сохранить в сессии
   if (isset($form_state["values"]["company"])) ext_user_store_session_setting('page_year_plan_fact_company', $form_state["values"]["company"]);
@@ -973,7 +975,7 @@ function prod_year_plan_fact_form($form, $form_state)
     ],
   ];
 
-  $options_c = [0 => ' - Все - '];
+  $options_c = [' - Все - '];
   $query = db_select('taxonomy_term_data', 't');
   $query ->fields('t', ['tid', 'name']);
   $query ->orderBy('name');
@@ -990,13 +992,13 @@ function prod_year_plan_fact_form($form, $form_state)
     }
   }
 
-  $company = $company && isset($options_c[$company]) ? $company : array_key_first($options_c);
+  $company_default = isset($company) && isset($options_c[$company]) ? $company : array_keys($options_c)[1];
 
   $form['filters']['company'] = array(
     '#title' => 'Компания',
     '#type' => 'select',
     '#options' => $options_c,
-    '#default_value' => $company,
+    '#default_value' => $company_default,
     '#ajax' => [
       'callback' => 'prod_year_plan_fact_form_callback',
       'wrapper' => 'year-plan-fact-form-wrapper',
@@ -1012,7 +1014,7 @@ function prod_year_plan_fact_form($form, $form_state)
   $query->innerJoin('field_data_field_pp_nomenklatura', 'fn', 'fn.field_pp_nomenklatura_target_id = t.tid');
   if ($companies) {
     $query->innerJoin('field_data_field_client', 'fc', 'fc.entity_id = t.tid');
-    $query->condition('fc.field_client_tid', $company ? [$company] : array_keys($companies), 'IN');
+    $query->condition('fc.field_client_tid', $company_default ? [$company_default] : array_keys($companies), 'IN');
   }
   if ($result = $query->execute()->fetchAllAssoc('tid')) {
     foreach ($result as $tid => $term) {
@@ -1096,7 +1098,7 @@ function prod_year_plan_fact_form($form, $form_state)
   ];
 
   $form['table'] = [
-    '#markup' => prod_year_plan_fact_table($company, $nom, $punit, $year, $month),
+    '#markup' => prod_year_plan_fact_table($company_default, $nom, $punit, $year, $month),
   ];
 
 

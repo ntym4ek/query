@@ -423,7 +423,7 @@ function ext_user_manager_settings_form($form, $form_state, $account = null)
   $form['#suffix'] = '</div>';
   $form['mails'] = [
     '#title' => 'Рассылка',
-    '#description' => 'уведомления об запросах клиентов',
+    '#description' => 'уведомления о запросах клиентов',
     '#type' => 'checkboxes',
     '#name' => 'mails',
     '#options' => [
@@ -469,7 +469,8 @@ function ext_user_get_user_info($user = null)
 
     $label = t('User');
     if (ext_user_has_roles([CLIENT_RID, USER_PRODUCTION_RID], $account)) $label = 'Клиент';
-    if (ext_user_has_roles([MANAGER_RID, MANAGER_PRODUCTION_RID], $account)) $label = 'Менеджер производства';
+    if (ext_user_has_roles([MANAGER_RID, MANAGER_PRODUCTION_RID], $account)) $label = 'Производство';
+    if (ext_user_has_roles([ADMIN_RID], $account)) $label = 'Админ';
 
     $companies = ['list' => [], 'formatted' => ''];
     if (!empty($account->uid)) {
