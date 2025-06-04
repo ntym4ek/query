@@ -253,6 +253,9 @@ function prod_plan_import($array)
       drupal_mail('system', 'mail', 'mega_comp@mail.ru', language_default(), array(
         'context' => ['subject' => 'Производство Агрохимикат. Ошибка импорта', 'message' => $err_message]
       ));
+      drupal_mail('system', 'mail', 'aleksey.shumilov@kccc.ru', language_default(), array(
+        'context' => ['subject' => 'Производство Агрохимикат. Ошибка импорта', 'message' => $err_message]
+      ));
       return false;
     }
 
@@ -367,7 +370,7 @@ function prod_plan_import($array)
  * @param $array - массив данных
  * @return bool - результат выполнения
  */
-function prod_message_import($array)
+function prod_message_import($array): bool
 {
   $message_id_1c  = empty($array["ID_1c"]) ? '' : $array["ID_1c"];
 
